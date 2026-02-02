@@ -41,28 +41,100 @@ function formatCurrency(num) {
     return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-// Fetch data from API
+// Fetch data - try API first, fallback to static JSON
 async function fetchData(period, refresh = false) {
-    const url = `/api/analyze?period=${period}${refresh ? '&refresh=true' : ''}`;
-    const response = await fetch(url);
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to fetch data');
+    try {
+        // Try API endpoint first (for local development)
+        const apiUrl = `/api/analyze?period=${period}${refresh ? '&refresh=true' : ''}`;
+        const response = await fetch(apiUrl);
+        if (response.ok) {
+            const data = await response.json();
+            if (data && data.totals) {
+                return data;
+            }
+        }
+    } catch (e) {
+        console.log('API not available, using static data');
     }
-    return response.json();
+    
+    // Fallback to static JSON file (for Vercel/static hosting)
+    const staticUrl = `/static/data.json`;
+    const response = await fetch(staticUrl);
+    if (!response.ok) {
+        throw new Error('Failed to load data');
+    }
+    const allData = await response.json();
+    return allData[period] || allData['14d'] || {};
 }
 
-// Fetch projections
-async function fetchProjections() {
+// Fetch projections - calculate from current data
+async function fetchProjections(byInfra) {
     try {
         const response = await fetch('/api/projections');
         if (response.ok) {
-            return response.json();
+            const data = await response.json();
+            if (data && Object.keys(data).length > 0) {
+                return data;
+            }
         }
     } catch (e) {
-        console.log('Projections endpoint not available, using client-side calculation');
+        console.log('Projections endpoint not available, calculating client-side');
     }
-    return null;
+    
+    // Calculate projections client-side
+    return calculateProjectionsClientSide(byInfra);
+}
+
+// Client-side projection calculation
+function calculateProjectionsClientSide(byInfra) {
+    const TARGET_SENDS = 100000;
+    const PROJECTION_INFRAS = ['Maldoso', 'Google Reseller', 'Aged Outlook'];
+    
+    const COSTS = {
+        'Maldoso': { monthly_per_mailbox: 1.67, sends_per_day: 15, mailboxes_per_domain: 4, domain_cost: 4.00, setup_per_mailbox: 0 },
+        'Google Reseller': { monthly_per_mailbox: 2.00, sends_per_day: 20, mailboxes_per_domain: 3, domain_cost: 4.00, setup_per_mailbox: 0.20 },
+        'Aged Outlook': { monthly_per_tenant: 4.22, sends_per_day: 10, mailboxes_per_tenant: 25, domains_per_tenant: 1, tenant_cost: 11.22, aged_domain_cost: 7.00 }
+    };
+    
+    const projections = {};
+    
+    for (const infraType of PROJECTION_INFRAS) {
+        const config = COSTS[infraType];
+        if (!config) continue;
+        
+        const mailboxesNeeded = Math.ceil(TARGET_SENDS / config.sends_per_day);
+        let monthlyCost, setupCost, domainsNeeded;
+        
+        if (infraType === 'Aged Outlook') {
+            const tenantsNeeded = Math.ceil(mailboxesNeeded / config.mailboxes_per_tenant);
+            domainsNeeded = tenantsNeeded * config.domains_per_tenant;
+            monthlyCost = tenantsNeeded * config.monthly_per_tenant;
+            setupCost = tenantsNeeded * (config.tenant_cost + config.aged_domain_cost);
+        } else {
+            domainsNeeded = Math.ceil(mailboxesNeeded / config.mailboxes_per_domain);
+            monthlyCost = mailboxesNeeded * config.monthly_per_mailbox;
+            setupCost = (domainsNeeded * config.domain_cost) + (mailboxesNeeded * (config.setup_per_mailbox || 0));
+        }
+        
+        // Get positive rate from current data
+        const infraData = byInfra ? byInfra[infraType] : null;
+        const positiveRate = infraData ? (infraData.positive_rate || 0) : 0;
+        const expectedPositivesPerMonth = (TARGET_SENDS * (positiveRate / 100)) * 30;
+        const costPerPositive = expectedPositivesPerMonth > 0 ? monthlyCost / expectedPositivesPerMonth : 0;
+        
+        projections[infraType] = {
+            sends_per_day: config.sends_per_day,
+            mailboxes_needed: mailboxesNeeded,
+            domains_needed: domainsNeeded,
+            monthly_cost: Math.round(monthlyCost * 100) / 100,
+            setup_cost: Math.round(setupCost * 100) / 100,
+            positive_rate: positiveRate,
+            expected_positives_per_month: Math.round(expectedPositivesPerMonth),
+            cost_per_positive: Math.round(costPerPositive * 100) / 100
+        };
+    }
+    
+    return projections;
 }
 
 // Tab switching
@@ -466,8 +538,8 @@ async function loadData(period, refresh = false) {
         updateCharts(data.by_infra || {});
         updateMeta(data.meta || { start_date: '-', end_date: '-', days: 0, generated_at: new Date().toISOString() });
         
-        // Load projections
-        const projections = await fetchProjections();
+        // Load projections (pass byInfra for client-side calculation fallback)
+        const projections = await fetchProjections(data.by_infra || {});
         if (projections) {
             updateProjectionsTable(projections);
         }
