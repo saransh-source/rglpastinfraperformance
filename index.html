@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RGL Infra Performance Analyzer</title>
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>RGL Infra Performance</h1>
+            <p class="subtitle">Email Infrastructure Analysis Dashboard</p>
+        </header>
+
+        <!-- Time Period Selector -->
+        <div class="period-selector">
+            <button class="period-btn" data-period="3d">Last 3 Days</button>
+            <button class="period-btn" data-period="7d">Last 7 Days</button>
+            <button class="period-btn active" data-period="14d">Last 2 Weeks</button>
+            <button class="period-btn" data-period="30d">Last 30 Days</button>
+            <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading data...</p>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div id="tabNav" class="tab-nav" style="display: none;">
+            <button class="tab-btn active" data-tab="overview">Overview</button>
+            <button class="tab-btn" data-tab="infra">Infra Comparison</button>
+            <button class="tab-btn" data-tab="tld">TLD Analysis</button>
+            <button class="tab-btn" data-tab="warmup">Warmup Status</button>
+            <button class="tab-btn" data-tab="clients">Clients</button>
+            <button class="tab-btn" data-tab="projections">Cost Projections</button>
+        </div>
+
+        <!-- TAB: Overview -->
+        <div id="tab-overview" class="tab-content" style="display: none;">
+            <div class="overview-cards">
+                <div class="card">
+                    <div class="card-label">Total Sends</div>
+                    <div class="card-value" id="totalSends">-</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Total Replies</div>
+                    <div class="card-value" id="totalReplies">-</div>
+                </div>
+                <div class="card highlight">
+                    <div class="card-label">Positive Replies</div>
+                    <div class="card-value" id="totalPositive">-</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Reply Rate</div>
+                    <div class="card-value" id="replyRate">-</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">+ve Rate (Overall)</div>
+                    <div class="card-value" id="positiveRate">-</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">+ve Rate (of Replies)</div>
+                    <div class="card-value" id="positiveReplyRate">-</div>
+                </div>
+                <div class="card">
+                    <div class="card-label">Mailboxes</div>
+                    <div class="card-value" id="mailboxCount">-</div>
+                </div>
+            </div>
+            
+            <div class="capacity-cards">
+                <div class="card-wide">
+                    <div class="card-label">Current Daily Capacity</div>
+                    <div class="card-value" id="currentCapacity">-</div>
+                    <div class="card-sublabel">Based on current daily limits</div>
+                </div>
+                <div class="card-wide">
+                    <div class="card-label">Theoretical Max Capacity</div>
+                    <div class="card-value" id="theoreticalMax">-</div>
+                    <div class="card-sublabel">If all mailboxes at max limit</div>
+                </div>
+                <div class="card-wide">
+                    <div class="card-label">Positives/Day</div>
+                    <div class="card-value" id="positivesPerDay">-</div>
+                </div>
+            </div>
+
+            <!-- Charts Section -->
+            <div class="charts-section">
+                <div class="chart-container">
+                    <h3>Sends by Infra Type</h3>
+                    <canvas id="sendsChart"></canvas>
+                </div>
+                <div class="chart-container">
+                    <h3>Positive Rate by Infra Type</h3>
+                    <canvas id="rateChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- TAB: Infra Comparison -->
+        <div id="tab-infra" class="tab-content" style="display: none;">
+            <h2>Infrastructure Performance Comparison</h2>
+            <div class="table-wrapper">
+                <table id="infraTable">
+                    <thead>
+                        <tr>
+                            <th>Infra Type</th>
+                            <th>Mailboxes</th>
+                            <th>Domains</th>
+                            <th>Current Cap</th>
+                            <th>Theo Max</th>
+                            <th>Sends</th>
+                            <th>Replies</th>
+                            <th>Interested</th>
+                            <th>Reply %</th>
+                            <th>+ve %</th>
+                            <th>+ve Reply %</th>
+                            <th>Bounce %</th>
+                            <th>Avg/MB/Day</th>
+                            <th>+ve/Day</th>
+                        </tr>
+                    </thead>
+                    <tbody id="infraTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: TLD Analysis -->
+        <div id="tab-tld" class="tab-content" style="display: none;">
+            <h2>TLD Performance Analysis</h2>
+            
+            <h3>Overall TLD Performance</h3>
+            <div class="table-wrapper">
+                <table id="tldTable">
+                    <thead>
+                        <tr>
+                            <th>TLD</th>
+                            <th>Mailboxes</th>
+                            <th>Domains</th>
+                            <th>Sends</th>
+                            <th>Replies</th>
+                            <th>Interested</th>
+                            <th>Reply %</th>
+                            <th>+ve %</th>
+                            <th>+ve Reply %</th>
+                            <th>Bounce %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tldTableBody">
+                    </tbody>
+                </table>
+            </div>
+
+            <h3>TLD by Infra Type</h3>
+            <div class="filter-row">
+                <label for="infraTldFilter">Filter by Infra:</label>
+                <select id="infraTldFilter">
+                    <option value="all">All Infra Types</option>
+                </select>
+            </div>
+            <div class="table-wrapper">
+                <table id="infraTldTable">
+                    <thead>
+                        <tr>
+                            <th>Infra Type</th>
+                            <th>TLD</th>
+                            <th>Mailboxes</th>
+                            <th>Sends</th>
+                            <th>Reply %</th>
+                            <th>+ve %</th>
+                            <th>Bounce %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="infraTldTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: Warmup Status -->
+        <div id="tab-warmup" class="tab-content" style="display: none;">
+            <h2>Warmup Status by Infra Type</h2>
+            <div class="table-wrapper">
+                <table id="warmupTable">
+                    <thead>
+                        <tr>
+                            <th>Infra Type</th>
+                            <th>Total Mailboxes</th>
+                            <th>In Warmup</th>
+                            <th>Not Warmup</th>
+                            <th>Avg Warmup Limit</th>
+                            <th>Current Capacity</th>
+                            <th>Theoretical Max</th>
+                            <th>Capacity %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="warmupTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: Clients -->
+        <div id="tab-clients" class="tab-content" style="display: none;">
+            <h2>Client / Infra Breakdown</h2>
+            <div class="filter-row">
+                <label for="clientFilter">Select Client:</label>
+                <select id="clientFilter">
+                    <option value="all">All Clients</option>
+                </select>
+            </div>
+            <div class="table-wrapper">
+                <table id="clientTable">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Infra Type</th>
+                            <th>Mailboxes</th>
+                            <th>Domains</th>
+                            <th>Sends</th>
+                            <th>Replies</th>
+                            <th>Interested</th>
+                            <th>Reply %</th>
+                            <th>+ve %</th>
+                            <th>+ve Reply %</th>
+                            <th>Bounce %</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientTableBody">
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB: Cost Projections -->
+        <div id="tab-projections" class="tab-content" style="display: none;">
+            <h2>Cost Projections for 100K Sends/Day</h2>
+            <p class="section-desc">Estimated costs to reach 100,000 email sends per day capacity (Maldoso, Google Reseller, Aged Outlook only)</p>
+            <div class="table-wrapper">
+                <table id="projectionsTable">
+                    <thead>
+                        <tr>
+                            <th>Infra Type</th>
+                            <th>Sends/MB/Day</th>
+                            <th>Mailboxes Needed</th>
+                            <th>Domains Needed</th>
+                            <th>Monthly Cost</th>
+                            <th>One-Time Setup</th>
+                            <th>+ve Rate</th>
+                            <th>Expected +ve/Month</th>
+                            <th>Cost per Positive</th>
+                        </tr>
+                    </thead>
+                    <tbody id="projectionsTableBody">
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="projections-notes">
+                <h3>Cost Breakdown</h3>
+                <ul>
+                    <li><strong>Maldoso:</strong> $1.67/mailbox/month, 15 sends/day, 4 mailboxes/domain, $4 domain cost</li>
+                    <li><strong>Google Reseller:</strong> $2.00/mailbox/month, 20 sends/day, 3 mailboxes/domain, $0.20 setup/mailbox, $4 domain cost</li>
+                    <li><strong>Aged Outlook:</strong> $4.22/month per tenant (25 mailboxes), 10 sends/day, 1 domain/tenant, $11.22 tenant cost (one-time), $7 aged domain premium (one-time)</li>
+                </ul>
+                <h3>How Cost per Positive is Calculated</h3>
+                <p>Cost per Positive = Monthly Cost ÷ Expected Positives per Month (excludes one-time setup costs)</p>
+                <p>Expected Positives = (100K sends/day × current +ve rate) × 30 days</p>
+            </div>
+        </div>
+
+        <!-- Meta Info -->
+        <footer id="footer" style="display: none;">
+            <p>Data period: <span id="dataPeriod">-</span> | Generated: <span id="generatedAt">-</span></p>
+        </footer>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
