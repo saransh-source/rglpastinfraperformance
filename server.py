@@ -8,7 +8,13 @@ import os
 from flask import Flask, render_template, jsonify, request
 from config import TIME_PERIODS, INFRA_COSTS, INFRA_MAX_LIMITS, TRACKED_INFRA_TYPES, PROJECTION_INFRA_TYPES
 
-app = Flask(__name__)
+# Get absolute path for templates and static files
+import pathlib
+BASE_DIR = pathlib.Path(__file__).parent.absolute()
+
+app = Flask(__name__, 
+            template_folder=str(BASE_DIR / "templates"),
+            static_folder=str(BASE_DIR / "static"))
 
 # Load static data from JSON file
 _data_cache = None
