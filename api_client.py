@@ -1,0 +1,200 @@
+"""
+RGL Infra Tracking - API Client
+Wrapper for RevGenLabs API endpoints
+"""
+
+import requests
+from typing import Optional
+from config import BASE_URL, WORKSPACES
+
+
+class RevGenLabsAPI:
+    """API client for RevGenLabs email platform"""
+    
+    def __init__(self, workspace_name: str, token: str):
+        self.workspace_name = workspace_name
+        self.token = token
+        self.base_url = BASE_URL
+        self.headers = {
+            "Authorization": f"Bearer {token}",
+            "Accept": "application/json",
+            "Content-Type": "application/json",
+        }
+    
+    def _get(self, endpoint: str, params: Optional[dict] = None) -> dict:
+        """Make GET request to API"""
+        url = f"{self.base_url}{endpoint}"
+        try:
+            response = requests.get(url, headers=self.headers, params=params, timeout=30)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"[{self.workspace_name}] API error on {endpoint}: {e}")
+            return {"data": []}
+    
+    def _get_all_pages(self, endpoint: str, params: Optional[dict] = None) -> list:
+        """Fetch all pages of paginated endpoint"""
+        all_data = []
+        page = 1
+        params = params or {}
+        params["per_page"] = 100  # Request 100 items per page for speed
+        
+        while True:
+            params["page"] = page
+            response = self._get(endpoint, params)
+            data = response.get("data", [])
+            
+            if not data:
+                break
+            
+            all_data.extend(data)
+            
+            # Check if there are more pages
+            meta = response.get("meta", {})
+            if page >= meta.get("last_page", 1):
+                break
+            
+            page += 1
+        
+        return all_data
+    
+    def get_sender_emails(self) -> list:
+        """
+        Get all sender emails (mailboxes) with their stats and tags
+        
+        Returns list of mailboxes with:
+        - id, email, name
+        - tags (containing infra type)
+        - emails_sent_count, total_replied_count, bounced_count
+        - interested_leads_count, total_leads_contacted_count
+        """
+        return self._get_all_pages("/api/sender-emails")
+    
+    def get_campaigns(self) -> list:
+        """
+        Get all campaigns with their stats
+        
+        Returns list of campaigns with:
+        - id, name, status
+        - emails_sent, replied, bounced, interested
+        - total_leads_contacted
+        """
+        return self._get_all_pages("/api/campaigns")
+    
+    def get_workspace_stats(self, start_date: str, end_date: str) -> dict:
+        """
+        Get aggregated workspace stats for date range
+        
+        Args:
+            start_date: YYYY-MM-DD format
+            end_date: YYYY-MM-DD format
+        """
+        params = {"start_date": start_date, "end_date": end_date}
+        response = self._get("/api/workspaces/v1.1/stats", params)
+        return response.get("data", {})
+    
+    def get_workspace_chart_stats(self, start_date: str, end_date: str) -> list:
+        """
+        Get daily time-series stats for workspace
+        
+        Args:
+            start_date: YYYY-MM-DD format
+            end_date: YYYY-MM-DD format
+        
+        Returns list of series (Sent, Replied, Interested, Bounced)
+        """
+        params = {"start_date": start_date, "end_date": end_date}
+        response = self._get("/api/workspaces/v1.1/line-area-chart-stats", params)
+        return response.get("data", [])
+    
+    def get_warmup_status(self) -> list:
+        """Get warmup status for all sender emails"""
+        return self._get_all_pages("/api/warmup/sender-emails")
+    
+    def get_replies(self, per_page: int = 100) -> list:
+        """Get all replies"""
+        return self._get_all_pages("/api/replies", {"per_page": per_page})
+    
+    def get_sender_email_stats(self, sender_email_ids: list, start_date: str, end_date: str) -> dict:
+        """
+        Get time-filtered stats for specific sender emails
+        
+        Args:
+            sender_email_ids: List of sender email IDs
+            start_date: YYYY-MM-DD format
+            end_date: YYYY-MM-DD format
+        
+        Returns dict with aggregated stats: {sent, replied, bounced, interested, ...}
+        """
+        if not sender_email_ids:
+            return {"sent": 0, "replied": 0, "bounced": 0, "interested": 0, "unsubscribed": 0}
+        
+        # Build query params with multiple sender_email_ids
+        params = {"start_date": start_date, "end_date": end_date}
+        
+        # Process in batches of 100 to avoid URL length limits
+        batch_size = 100
+        totals = {"Sent": 0, "Replied": 0, "Bounced": 0, "Interested": 0, "Unsubscribed": 0}
+        
+        for i in range(0, len(sender_email_ids), batch_size):
+            batch = sender_email_ids[i:i + batch_size]
+            batch_params = params.copy()
+            
+            # Build URL with array params
+            url = "/api/campaign-events/stats"
+            query_parts = [f"start_date={start_date}", f"end_date={end_date}"]
+            for sid in batch:
+                query_parts.append(f"sender_email_ids[]={sid}")
+            
+            full_url = f"{url}?{'&'.join(query_parts)}"
+            response = self._get(full_url)
+            
+            # Sum up daily values for each metric
+            for series in response.get("data", []):
+                label = series.get("label", "")
+                if label in totals:
+                    for _, value in series.get("dates", []):
+                        totals[label] += value
+        
+        return {
+            "sent": totals["Sent"],
+            "replied": totals["Replied"],
+            "bounced": totals["Bounced"],
+            "interested": totals["Interested"],
+            "unsubscribed": totals["Unsubscribed"],
+        }
+
+
+def get_all_workspace_clients() -> dict[str, RevGenLabsAPI]:
+    """
+    Create API clients for all configured workspaces
+    
+    Returns dict of workspace_name -> API client
+    """
+    clients = {}
+    for name, token in WORKSPACES.items():
+        clients[name] = RevGenLabsAPI(name, token)
+    return clients
+
+
+# Quick test
+if __name__ == "__main__":
+    # Test with one workspace
+    test_workspace = "Reev"
+    token = WORKSPACES[test_workspace]
+    
+    client = RevGenLabsAPI(test_workspace, token)
+    
+    print(f"Testing API for {test_workspace}...")
+    
+    # Test sender emails
+    sender_emails = client.get_sender_emails()
+    print(f"  Sender emails: {len(sender_emails)}")
+    
+    if sender_emails:
+        sample = sender_emails[0]
+        print(f"  Sample: {sample.get('email')} - Tags: {[t.get('name') for t in sample.get('tags', [])]}")
+    
+    # Test campaigns
+    campaigns = client.get_campaigns()
+    print(f"  Campaigns: {len(campaigns)}")
