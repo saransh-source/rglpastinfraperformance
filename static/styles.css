@@ -111,6 +111,18 @@ header h1 {
     color: var(--bg-primary);
 }
 
+.date-range {
+    display: flex;
+    align-items: center;
+    padding: 0.5rem 1rem;
+    color: var(--text-secondary);
+    font-size: 0.9rem;
+    font-family: var(--font-mono);
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
 /* Loading State */
 .loading {
     text-align: center;
@@ -377,6 +389,7 @@ tr:hover {
 .infra-maldoso { color: var(--accent-green); }
 .infra-legacy-panel { color: var(--accent-yellow); }
 .infra-winnr-smtp { color: var(--accent-pink); }
+.infra-epan { color: var(--accent-cyan); }
 
 /* Status Badges */
 .status {

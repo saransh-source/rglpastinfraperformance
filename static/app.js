@@ -19,6 +19,7 @@ const infraColors = {
     'Legacy Panel': '#f59e0b',
     'Outlook': '#ef4444',
     'Winnr SMTP': '#ec4899',
+    'Epan': '#06b6d4',  // Cyan for Epan
     'Unknown': '#6b7280',
 };
 
@@ -476,10 +477,15 @@ function updateCharts(byInfra) {
     }
 }
 
-// Update footer meta
+// Update footer meta and date range display
 function updateMeta(meta) {
-    document.getElementById('dataPeriod').textContent = 
-        `${meta.start_date} to ${meta.end_date} (${meta.days} days)`;
+    // Update date range next to period buttons
+    const dateRangeEl = document.getElementById('dateRangeDisplay');
+    if (dateRangeEl) {
+        dateRangeEl.textContent = `${meta.start_date} → ${meta.end_date}`;
+    }
+    
+    // Update footer
     document.getElementById('generatedAt').textContent = 
         new Date(meta.generated_at).toLocaleString();
 }

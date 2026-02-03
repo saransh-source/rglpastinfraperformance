@@ -21,6 +21,7 @@
             <button class="period-btn active" data-period="14d">Last 2 Weeks</button>
             <button class="period-btn" data-period="30d">Last 30 Days</button>
             <button class="refresh-btn" id="refreshBtn">↻ Refresh</button>
+            <span class="date-range" id="dateRangeDisplay"></span>
         </div>
 
         <!-- Loading State -->
@@ -276,8 +277,8 @@
         </div>
 
         <!-- Meta Info -->
-        <footer id="footer" style="display: none;">
-            <p>Data period: <span id="dataPeriod">-</span> | Generated: <span id="generatedAt">-</span></p>
+        <footer id="footer">
+            <p>Generated: <span id="generatedAt">-</span></p>
         </footer>
     </div>
 

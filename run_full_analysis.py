@@ -19,6 +19,9 @@ print("  - Legacy Panel (L)")
 print("  - Maldoso (MD SMTP)")
 print("  - Outlook")
 print("  - Winnr SMTP (WR SMTP)")
+print("  - Epan (E) - Edu panel")
+print()
+print("⚠️  This may take 30-60 minutes due to API pagination")
 print()
 
 # Run analysis
