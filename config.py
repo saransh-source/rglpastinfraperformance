@@ -39,11 +39,9 @@ TAG_TO_INFRA = {
     "Outlook": "Outlook",
     "WR SMTP": "Winnr SMTP",
     "winnr SMTP": "Winnr SMTP",
-    "E": "Epan",  # Edu panel that blew up ~Jan 27, 2026
-    "e": "Epan",
 }
 
-# Canonical infra types we care about (7 types including Epan)
+# Canonical infra types we care about
 TRACKED_INFRA_TYPES = [
     "Google Reseller",
     "Aged Outlook",
@@ -51,7 +49,6 @@ TRACKED_INFRA_TYPES = [
     "Maldoso",
     "Outlook",
     "Winnr SMTP",
-    "Epan",
 ]
 
 # Time period options (in days)
@@ -73,7 +70,6 @@ INFRA_MAX_LIMITS = {
     "Maldoso": 15,
     "Legacy Panel": 2,
     "Winnr SMTP": 10,
-    "Epan": 10,  # Edu panel - assumed similar to other panels
 }
 
 # Infra types to show in cost projections (only the main 3)

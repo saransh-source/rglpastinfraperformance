@@ -389,7 +389,6 @@ tr:hover {
 .infra-maldoso { color: var(--accent-green); }
 .infra-legacy-panel { color: var(--accent-yellow); }
 .infra-winnr-smtp { color: var(--accent-pink); }
-.infra-epan { color: var(--accent-cyan); }
 
 /* Status Badges */
 .status {

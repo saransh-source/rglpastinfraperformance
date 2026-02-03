@@ -19,7 +19,6 @@ const infraColors = {
     'Legacy Panel': '#f59e0b',
     'Outlook': '#ef4444',
     'Winnr SMTP': '#ec4899',
-    'Epan': '#06b6d4',  // Cyan for Epan
     'Unknown': '#6b7280',
 };
 
@@ -42,23 +41,9 @@ function formatCurrency(num) {
     return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
 }
 
-// Fetch data - try API first, fallback to static JSON
+// Fetch data - use static JSON (faster and works on Vercel)
 async function fetchData(period, refresh = false) {
-    try {
-        // Try API endpoint first (for local development)
-        const apiUrl = `/api/analyze?period=${period}${refresh ? '&refresh=true' : ''}`;
-        const response = await fetch(apiUrl);
-        if (response.ok) {
-            const data = await response.json();
-            if (data && data.totals) {
-                return data;
-            }
-        }
-    } catch (e) {
-        console.log('API not available, using static data');
-    }
-    
-    // Fallback to static JSON file (for Vercel/static hosting)
+    // Always use static JSON for reliability
     const staticUrl = `/static/data.json`;
     const response = await fetch(staticUrl);
     if (!response.ok) {
@@ -68,21 +53,8 @@ async function fetchData(period, refresh = false) {
     return allData[period] || allData['14d'] || {};
 }
 
-// Fetch projections - calculate from current data
+// Fetch projections - calculate client-side (no API needed)
 async function fetchProjections(byInfra) {
-    try {
-        const response = await fetch('/api/projections');
-        if (response.ok) {
-            const data = await response.json();
-            if (data && Object.keys(data).length > 0) {
-                return data;
-            }
-        }
-    } catch (e) {
-        console.log('Projections endpoint not available, calculating client-side');
-    }
-    
-    // Calculate projections client-side
     return calculateProjectionsClientSide(byInfra);
 }
 
