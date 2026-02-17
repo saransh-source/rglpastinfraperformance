@@ -24,6 +24,6 @@ jobs:
         run: pip install -r requirements.txt
 
       - name: Run data collection for yesterday
-        run: python supabase_data_collector.py backfill 2 1
+        run: python supabase_data_collector.py backfill 2 0
         env:
           SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
