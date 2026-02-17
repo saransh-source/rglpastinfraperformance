@@ -115,6 +115,29 @@ class RevGenLabsAPI:
         """Get all replies"""
         return self._get_all_pages("/api/replies", {"per_page": per_page})
     
+    def get_leads(self, params: Optional[dict] = None) -> list:
+        """
+        Get all leads with their email and status
+        
+        Returns list of leads with:
+        - id, email, first_name, last_name, company_name
+        - status (contacted, replied, interested, etc.)
+        - created_at, updated_at
+        - campaign info
+        """
+        return self._get_all_pages("/api/leads", params)
+    
+    def get_leads_page(self, page: int = 1, per_page: int = 100, params: Optional[dict] = None) -> dict:
+        """
+        Get a single page of leads (for large datasets)
+        
+        Returns dict with data and meta for pagination
+        """
+        request_params = params or {}
+        request_params["page"] = page
+        request_params["per_page"] = per_page
+        return self._get("/api/leads", request_params)
+    
     def get_sender_email_stats(self, sender_email_ids: list, start_date: str, end_date: str) -> dict:
         """
         Get time-filtered stats for specific sender emails
@@ -163,6 +186,59 @@ class RevGenLabsAPI:
             "interested": totals["Interested"],
             "unsubscribed": totals["Unsubscribed"],
         }
+
+    def get_sender_email_stats_daily(self, sender_email_ids: list, start_date: str, end_date: str) -> dict:
+        """
+        Get time-filtered stats for specific sender emails with DAILY breakdown
+
+        Args:
+            sender_email_ids: List of sender email IDs
+            start_date: YYYY-MM-DD format
+            end_date: YYYY-MM-DD format
+
+        Returns dict of date -> {sent, replied, bounced, interested} for each day
+        """
+        if not sender_email_ids:
+            return {}
+
+        # Process in batches of 100 to avoid URL length limits
+        batch_size = 100
+        daily_totals = {}  # date -> {Sent, Replied, ...}
+
+        for i in range(0, len(sender_email_ids), batch_size):
+            batch = sender_email_ids[i:i + batch_size]
+
+            # Build URL with array params
+            url = "/api/campaign-events/stats"
+            query_parts = [f"start_date={start_date}", f"end_date={end_date}"]
+            for sid in batch:
+                query_parts.append(f"sender_email_ids[]={sid}")
+
+            full_url = f"{url}?{'&'.join(query_parts)}"
+            response = self._get(full_url)
+
+            # Extract daily values for each metric
+            for series in response.get("data", []):
+                label = series.get("label", "")
+                if label not in ["Sent", "Replied", "Bounced", "Interested", "Unsubscribed"]:
+                    continue
+
+                for date_str, value in series.get("dates", []):
+                    if date_str not in daily_totals:
+                        daily_totals[date_str] = {"Sent": 0, "Replied": 0, "Bounced": 0, "Interested": 0, "Unsubscribed": 0}
+                    daily_totals[date_str][label] += value
+
+        # Convert to lowercase keys
+        result = {}
+        for date_str, stats in daily_totals.items():
+            result[date_str] = {
+                "sent": stats["Sent"],
+                "replied": stats["Replied"],
+                "bounced": stats["Bounced"],
+                "interested": stats["Interested"],
+            }
+
+        return result
 
 
 def get_all_workspace_clients() -> dict[str, RevGenLabsAPI]:

@@ -1,7 +1,14 @@
 {
   "version": 2,
   "rewrites": [
+    { "source": "/api/collect", "destination": "/api/collect" },
     { "source": "/static/:path*", "destination": "/static/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
+  ],
+  "crons": [
+    {
+      "path": "/api/collect",
+      "schedule": "0 11 * * *"
+    }
   ]
 }

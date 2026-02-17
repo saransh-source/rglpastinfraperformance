@@ -65,19 +65,25 @@ header h1 {
 .period-selector {
     display: flex;
     justify-content: center;
+    align-items: center;
     gap: 0.75rem;
     margin-bottom: 2rem;
     flex-wrap: wrap;
 }
 
+.quick-select {
+    display: flex;
+    gap: 0.25rem;
+}
+
 .period-btn {
-    padding: 0.75rem 1.5rem;
+    padding: 0.6rem 1rem;
     background: var(--bg-card);
     border: 1px solid var(--border-color);
     color: var(--text-secondary);
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 6px;
     transition: all 0.2s ease;
     font-family: inherit;
 }
@@ -94,14 +100,79 @@ header h1 {
     border-color: var(--accent-primary);
 }
 
+.period-btn.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    position: relative;
+}
+
+.period-btn.disabled::after {
+    content: "Soon";
+    position: absolute;
+    top: -8px;
+    right: -8px;
+    background: var(--accent-yellow);
+    color: var(--bg-primary);
+    font-size: 0.6rem;
+    padding: 1px 4px;
+    border-radius: 3px;
+    font-weight: 600;
+}
+
+.date-picker {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.date-picker label {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+}
+
+.date-picker input[type="date"] {
+    padding: 0.4rem 0.5rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    border-radius: 4px;
+    font-family: var(--font-mono);
+}
+
+.date-picker input[type="date"]:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+.apply-btn {
+    padding: 0.5rem 1rem;
+    background: var(--accent-primary);
+    border: none;
+    color: white;
+    font-size: 0.85rem;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s ease;
+    font-family: inherit;
+}
+
+.apply-btn:hover {
+    background: #2563eb;
+}
+
 .refresh-btn {
-    padding: 0.75rem 1.25rem;
+    padding: 0.6rem 1rem;
     background: transparent;
     border: 1px solid var(--accent-green);
     color: var(--accent-green);
-    font-size: 0.95rem;
+    font-size: 0.85rem;
     cursor: pointer;
-    border-radius: 8px;
+    border-radius: 6px;
     transition: all 0.2s ease;
     font-family: inherit;
 }
@@ -114,13 +185,24 @@ header h1 {
 .date-range {
     display: flex;
     align-items: center;
-    padding: 0.5rem 1rem;
+    padding: 0.4rem 0.75rem;
     color: var(--text-secondary);
-    font-size: 0.9rem;
+    font-size: 0.8rem;
     font-family: var(--font-mono);
     background: var(--bg-secondary);
-    border-radius: 8px;
+    border-radius: 6px;
     border: 1px solid var(--border-color);
+}
+
+.data-source {
+    padding: 0.4rem 0.75rem;
+    color: var(--accent-green);
+    font-size: 0.75rem;
+    font-weight: 600;
+    background: rgba(16, 185, 129, 0.15);
+    border-radius: 20px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
 }
 
 /* Loading State */
@@ -519,25 +601,215 @@ footer {
     .container {
         padding: 1rem;
     }
-    
+
     header h1 {
         font-size: 1.75rem;
     }
-    
+
     .charts-section {
         grid-template-columns: 1fr;
     }
-    
+
     .card-value {
         font-size: 1.4rem;
     }
-    
+
     .tab-nav {
         flex-wrap: wrap;
     }
-    
+
     .tab-btn {
         padding: 0.6rem 1rem;
         font-size: 0.85rem;
     }
+
+    .period-selector {
+        flex-direction: column;
+        align-items: stretch;
+    }
+
+    .date-picker {
+        flex-wrap: wrap;
+        justify-content: center;
+    }
+}
+
+/* ======================
+   Bounce Tab Styles
+   ====================== */
+
+.bounce-overview-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1.25rem;
+    margin-bottom: 2rem;
+}
+
+.card.danger {
+    border-color: var(--accent-red);
+    background: linear-gradient(135deg, var(--bg-secondary), rgba(239, 68, 68, 0.1));
+}
+
+.card.danger .card-value {
+    color: var(--accent-red);
+}
+
+.card.warning {
+    border-color: var(--accent-yellow);
+    background: linear-gradient(135deg, var(--bg-secondary), rgba(245, 158, 11, 0.1));
+}
+
+.card.warning .card-value {
+    color: var(--accent-yellow);
+}
+
+.bounce-breakdown-section {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+    gap: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.breakdown-card {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 1.25rem;
+}
+
+.breakdown-card h3 {
+    margin: 0 0 1rem 0;
+    font-size: 0.95rem;
+    color: var(--text-secondary);
+}
+
+/* Bounce Type Colors */
+.bounce-type-hard-bounce {
+    color: var(--accent-red);
+    font-weight: 600;
+}
+
+.bounce-type-soft-bounce {
+    color: var(--accent-yellow);
+}
+
+.bounce-type-block {
+    color: var(--accent-purple);
+}
+
+.bounce-type-complaint {
+    color: var(--accent-pink);
+}
+
+.bounce-type-invalid-address {
+    color: var(--accent-red);
+}
+
+.bounce-type-reputation-block {
+    color: var(--accent-yellow);
+}
+
+.bounce-type-aggregate {
+    color: var(--accent-primary);
+}
+
+.bounce-type-other,
+.bounce-type-unknown {
+    color: var(--text-secondary);
+}
+
+/* Data Source Indicator */
+.source-webhook {
+    color: var(--accent-green);
+    font-weight: 500;
+}
+
+.source-aggregate {
+    color: var(--accent-yellow);
+}
+
+/* Full width breakdown card */
+.breakdown-card.full-width {
+    grid-column: 1 / -1;
+}
+
+/* No data message */
+.no-data {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 2rem;
+    font-style: italic;
+}
+
+/* Severity Colors */
+.severity-critical {
+    color: var(--accent-red);
+    font-weight: 600;
+}
+
+.severity-normal {
+    color: var(--text-secondary);
+}
+
+/* ======================
+   Domain Health Tab Styles
+   ====================== */
+
+.danger-heading {
+    color: var(--accent-red) !important;
+}
+
+.warning-heading {
+    color: var(--accent-yellow) !important;
+}
+
+.success-heading {
+    color: var(--accent-green) !important;
+}
+
+.danger-col {
+    color: var(--accent-red);
+}
+
+.warning-col {
+    color: var(--accent-yellow);
+}
+
+.success-col {
+    color: var(--accent-green);
+}
+
+.danger-cell {
+    color: var(--accent-red);
+    font-weight: 600;
+}
+
+.warning-cell {
+    color: var(--accent-yellow);
+    font-weight: 600;
+}
+
+.success-cell {
+    color: var(--accent-green);
+    font-weight: 600;
+}
+
+/* Domain Health Tables */
+#tab-domains table td:first-child {
+    font-family: var(--font-sans);
+    font-weight: 500;
+}
+
+/* Filter Row Enhancements */
+.filter-row .apply-btn {
+    margin-left: 0.5rem;
+}
+
+/* Code Display */
+code {
+    font-family: var(--font-mono);
+    background: var(--bg-primary);
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
 }

@@ -30,25 +30,45 @@ WORKSPACES = {
     "Onramp": "179|uF36yPIzQGvz4BtEQOg4Zkw6Mrhm3UIHkp03amHKc2fe99a6",
 }
 
-# Map mailbox tags to standardized infra type names
+# Map mailbox tags to infra type names
+# IMPORTANT: Each tag is kept separate (no merging) per user requirement
 TAG_TO_INFRA = {
-    "GR": "Google Reseller",
-    "AO": "Aged Outlook", 
-    "L": "Legacy Panel",
-    "MD SMTP": "Maldoso",
+    # Each tag maps to itself - no merging
+    "GR": "GR",
+    "GR - N": "GR - N",  # Separate GR variant
+    "G-Vis": "G-Vis",
+    "G-VIs": "G-Vis",  # Case normalization only
+    "Google": "Google",
+    "AO": "AO",
+    "OD": "OD",  # Outlook Domain
+    "L": "L",
+    "MD SMTP": "MD SMTP",
     "Outlook": "Outlook",
-    "WR SMTP": "Winnr SMTP",
-    "winnr SMTP": "Winnr SMTP",
+    "New Outlook": "New Outlook",
+    "WR SMTP": "WR SMTP",
+    "winnr SMTP": "WR SMTP",  # Case normalization only
+    "Gpan 05-25": "Gpan",
+    "Gpan": "Gpan",
+    "E": "Everwarm",
+    "Everwarm 03-25": "Everwarm",
+    "Everwarm": "Everwarm",
 }
 
-# Canonical infra types we care about
+# All tracked infra types (raw tag names, no merging)
 TRACKED_INFRA_TYPES = [
-    "Google Reseller",
-    "Aged Outlook",
-    "Legacy Panel", 
-    "Maldoso",
+    "GR",
+    "GR - N",
+    "G-Vis",
+    "Google",
+    "AO",
+    "OD",
+    "L",
+    "MD SMTP",
     "Outlook",
-    "Winnr SMTP",
+    "New Outlook",
+    "WR SMTP",
+    "Gpan",
+    "Everwarm",
 ]
 
 # Time period options (in days)
@@ -64,24 +84,31 @@ EXCLUDED_WORKSPACES = []  # Add workspace names to exclude if needed
 
 # Maximum sends per mailbox per day when fully warm (theoretical max)
 INFRA_MAX_LIMITS = {
-    "Aged Outlook": 10,
+    "GR": 20,
+    "GR - N": 20,
+    "G-Vis": 20,
+    "Google": 20,
+    "AO": 10,
+    "OD": 10,
+    "L": 2,
+    "MD SMTP": 15,
     "Outlook": 10,
-    "Google Reseller": 20,
-    "Maldoso": 15,
-    "Legacy Panel": 2,
-    "Winnr SMTP": 10,
+    "New Outlook": 10,
+    "WR SMTP": 10,
+    "Gpan": 20,
+    "Everwarm": 15,
 }
 
-# Infra types to show in cost projections (only the main 3)
+# Infra types to show in cost projections (main types)
 PROJECTION_INFRA_TYPES = [
-    "Maldoso",
-    "Google Reseller",
-    "Aged Outlook",
+    "MD SMTP",
+    "GR",
+    "AO",
 ]
 
 # Cost structure for each infra type (for 100k sends/day projections)
 INFRA_COSTS = {
-    "Maldoso": {
+    "MD SMTP": {
         "monthly_per_mailbox": 1.67,
         "sends_per_day": 15,
         "mailboxes_per_domain": 4,
@@ -89,7 +116,7 @@ INFRA_COSTS = {
         "setup_per_mailbox": 0,
         "warmup_weeks": 2,
     },
-    "Google Reseller": {
+    "GR": {
         "monthly_per_mailbox": 2.00,
         "sends_per_day": 20,
         "mailboxes_per_domain": 3,
@@ -97,7 +124,7 @@ INFRA_COSTS = {
         "setup_per_mailbox": 0.20,
         "warmup_weeks": 4,
     },
-    "Aged Outlook": {
+    "AO": {
         # 25 mailboxes per domain, 1 domain per tenant, 25 mailboxes per tenant
         "monthly_per_tenant": 4.22,  # $4.22/month for 25 mailboxes
         "mailboxes_per_tenant": 25,
