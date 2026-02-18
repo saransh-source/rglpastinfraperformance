@@ -29,6 +29,12 @@ let latestInfraSnapshot = null;
 let startDate = null;
 let endDate = null;
 
+// Loading timeout and retry configuration
+const LOADING_TIMEOUT_MS = 12000; // Show "taking longer" message after 12 seconds
+const MAX_RETRIES = 3;
+let loadingTimeoutId = null;
+let currentRetryCount = 0;
+
 // Period to days mapping
 const PERIOD_DAYS = {
     '3d': 3,
@@ -1392,32 +1398,94 @@ function updateMeta(meta) {
 
 // Show/hide loading state
 function setLoading(isLoading) {
-    document.getElementById('loading').style.display = isLoading ? 'block' : 'none';
+    // Clear any pending timeout when loading state changes
+    if (loadingTimeoutId) {
+        clearTimeout(loadingTimeoutId);
+        loadingTimeoutId = null;
+    }
+
+    const loadingEl = document.getElementById('loading');
+    loadingEl.style.display = isLoading ? 'block' : 'none';
     document.getElementById('tabNav').style.display = isLoading ? 'none' : 'flex';
     document.getElementById('footer').style.display = isLoading ? 'none' : 'block';
-    
+
     // Show active tab content
     if (!isLoading) {
         switchTab(currentTab);
+        // Reset retry count on successful load
+        currentRetryCount = 0;
+        // Reset loading message to default
+        loadingEl.innerHTML = `
+            <div class="spinner"></div>
+            <p>Loading data...</p>
+        `;
     } else {
         document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+
+        // Set timeout to show "taking longer" message
+        loadingTimeoutId = setTimeout(() => {
+            showSlowLoadingMessage();
+        }, LOADING_TIMEOUT_MS);
     }
 }
 
-// Show error state
-function showError(message) {
+// Show slow loading message with retry option
+function showSlowLoadingMessage() {
+    const loadingEl = document.getElementById('loading');
+    loadingEl.innerHTML = `
+        <div class="spinner"></div>
+        <p class="slow-message">Taking longer than expected...</p>
+        <p class="slow-hint">The database might be waking up. This usually takes a few more seconds.</p>
+        <p class="slow-hint">Attempt ${currentRetryCount + 1} of ${MAX_RETRIES}</p>
+    `;
+}
+
+// Show error state with retry button
+function showError(message, canRetry = true) {
+    // Clear timeout
+    if (loadingTimeoutId) {
+        clearTimeout(loadingTimeoutId);
+        loadingTimeoutId = null;
+    }
+
     setLoading(false);
     document.getElementById('loading').style.display = 'block';
     document.getElementById('tabNav').style.display = 'none';
+
+    const retryButton = canRetry ? `
+        <button class="retry-btn" onclick="retryLoad()">Retry Now</button>
+    ` : '';
+
     document.getElementById('loading').innerHTML = `
         <div class="error">
             <p>⚠️ ${message}</p>
-            <p class="hint">Run: <code>python3 run_full_analysis.py</code> from your terminal</p>
+            <p class="hint">This may be due to a slow database connection or network issue.</p>
+            ${retryButton}
         </div>
     `;
 }
 
-// Main load function
+// Retry loading data
+function retryLoad() {
+    currentRetryCount = 0;
+    if (startDate && endDate) {
+        loadDataWithDateRange(startDate, endDate);
+    } else {
+        loadData(currentPeriod, true);
+    }
+}
+
+// Fetch data with timeout wrapper
+async function fetchWithTimeout(fetchFn, timeoutMs = 30000) {
+    return Promise.race([
+        fetchFn(),
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error('Request timed out')), timeoutMs)
+        )
+    ]);
+}
+
+// Main load function with retry logic
 async function loadData(period, refresh = false) {
     currentPeriod = period;
     setLoading(true);
@@ -1434,47 +1502,61 @@ async function loadData(period, refresh = false) {
         document.getElementById('startDate').value = window.SupabaseClient.getDateNDaysAgo(days);
     }
 
-    try {
-        const data = await fetchData(period, refresh);
-        currentData = data;
+    // Retry loop
+    while (currentRetryCount < MAX_RETRIES) {
+        try {
+            const data = await fetchWithTimeout(() => fetchData(period, refresh), 30000);
+            currentData = data;
 
-        if (!data.totals) {
-            throw new Error('No data available for this period');
+            if (!data.totals) {
+                throw new Error('No data available for this period');
+            }
+
+            // Update all sections (time-dependent)
+            updateOverview(data.totals, data.meta);
+            updateInfraTable(data.by_infra || {});
+            updateTldTables(data.by_tld || {}, data.by_infra_tld || {});
+            updateClientTable(data.by_client || {});
+            updateCharts(data.by_infra || {});
+            updateMeta(data.meta || { start_date: '-', end_date: '-', days: 0, generated_at: new Date().toISOString() });
+
+            // Load trend charts (agency-wide and infra)
+            updateAgencyTrendCharts();
+            updateInfraTrendChart();
+
+            // Load time-independent tabs (Warmup & Cost Projections) from latest snapshot
+            await fetchAndCacheLatestSnapshot();
+            updateWarmupTableFromSnapshot();
+            await updateProjectionsFromSnapshot();
+
+            // Load bounce and domain data in background
+            updateBouncesTab();
+            populateDomainClientFilter();
+            updateDomainsTab();
+
+            // Populate client analytics dropdown
+            populateClientAnalyticsDropdown();
+
+            setLoading(false);
+            return; // Success - exit the function
+        } catch (error) {
+            console.error(`Load attempt ${currentRetryCount + 1} failed:`, error);
+            currentRetryCount++;
+
+            if (currentRetryCount < MAX_RETRIES) {
+                // Update message and wait before retry
+                showSlowLoadingMessage();
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+            } else {
+                // All retries exhausted
+                showError('Failed to load data after multiple attempts. ' + error.message);
+                return;
+            }
         }
-
-        // Update all sections (time-dependent)
-        updateOverview(data.totals, data.meta);
-        updateInfraTable(data.by_infra || {});
-        updateTldTables(data.by_tld || {}, data.by_infra_tld || {});
-        updateClientTable(data.by_client || {});
-        updateCharts(data.by_infra || {});
-        updateMeta(data.meta || { start_date: '-', end_date: '-', days: 0, generated_at: new Date().toISOString() });
-
-        // Load trend charts (agency-wide and infra)
-        updateAgencyTrendCharts();
-        updateInfraTrendChart();
-
-        // Load time-independent tabs (Warmup & Cost Projections) from latest snapshot
-        await fetchAndCacheLatestSnapshot();
-        updateWarmupTableFromSnapshot();
-        await updateProjectionsFromSnapshot();
-
-        // Load bounce and domain data in background
-        updateBouncesTab();
-        populateDomainClientFilter();
-        updateDomainsTab();
-
-        // Populate client analytics dropdown
-        populateClientAnalyticsDropdown();
-
-        setLoading(false);
-    } catch (error) {
-        console.error('Error loading data:', error);
-        showError(error.message);
     }
 }
 
-// Load data with custom date range
+// Load data with custom date range (with retry logic)
 async function loadDataWithDateRange(start, end) {
     startDate = start;
     endDate = end;
@@ -1486,42 +1568,59 @@ async function loadDataWithDateRange(start, end) {
 
     setLoading(true);
 
-    try {
-        const data = await window.SupabaseClient.fetchInfraPerformance(start, end);
-        currentData = data;
+    // Retry loop
+    while (currentRetryCount < MAX_RETRIES) {
+        try {
+            const data = await fetchWithTimeout(
+                () => window.SupabaseClient.fetchInfraPerformance(start, end),
+                30000
+            );
+            currentData = data;
 
-        if (!data.totals) {
-            throw new Error('No data available for this date range');
+            if (!data.totals) {
+                throw new Error('No data available for this date range');
+            }
+
+            // Update all sections (time-dependent)
+            updateOverview(data.totals, data.meta);
+            updateInfraTable(data.by_infra || {});
+            updateTldTables(data.by_tld || {}, data.by_infra_tld || {});
+            updateClientTable(data.by_client || {});
+            updateCharts(data.by_infra || {});
+            updateMeta(data.meta);
+
+            // Load trend charts (agency-wide and infra)
+            updateAgencyTrendCharts();
+            updateInfraTrendChart();
+
+            // Warmup and Cost Projections use latest snapshot (time-independent)
+            // Only fetch if not already cached
+            if (!latestInfraSnapshot) {
+                await fetchAndCacheLatestSnapshot();
+            }
+            updateWarmupTableFromSnapshot();
+            await updateProjectionsFromSnapshot();
+
+            // Load bounce and domain data
+            updateBouncesTab();
+            updateDomainsTab();
+
+            setLoading(false);
+            return; // Success - exit the function
+        } catch (error) {
+            console.error(`Load attempt ${currentRetryCount + 1} failed:`, error);
+            currentRetryCount++;
+
+            if (currentRetryCount < MAX_RETRIES) {
+                // Update message and wait before retry
+                showSlowLoadingMessage();
+                await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2s before retry
+            } else {
+                // All retries exhausted
+                showError('Failed to load data after multiple attempts. ' + error.message);
+                return;
+            }
         }
-
-        // Update all sections (time-dependent)
-        updateOverview(data.totals, data.meta);
-        updateInfraTable(data.by_infra || {});
-        updateTldTables(data.by_tld || {}, data.by_infra_tld || {});
-        updateClientTable(data.by_client || {});
-        updateCharts(data.by_infra || {});
-        updateMeta(data.meta);
-
-        // Load trend charts (agency-wide and infra)
-        updateAgencyTrendCharts();
-        updateInfraTrendChart();
-
-        // Warmup and Cost Projections use latest snapshot (time-independent)
-        // Only fetch if not already cached
-        if (!latestInfraSnapshot) {
-            await fetchAndCacheLatestSnapshot();
-        }
-        updateWarmupTableFromSnapshot();
-        await updateProjectionsFromSnapshot();
-
-        // Load bounce and domain data
-        updateBouncesTab();
-        updateDomainsTab();
-
-        setLoading(false);
-    } catch (error) {
-        console.error('Error loading data:', error);
-        showError(error.message);
     }
 }
 
