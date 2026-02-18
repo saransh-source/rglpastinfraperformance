@@ -813,3 +813,102 @@ code {
     border-radius: 3px;
     font-size: 0.8rem;
 }
+
+/* ======================
+   Trend Charts Styles
+   ====================== */
+
+.trends-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.trends-section h3 {
+    font-size: 1.1rem;
+    margin: 0 0 1rem 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.infra-trends-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.infra-trends-section h3 {
+    font-size: 1.1rem;
+    margin: 0 0 1rem 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.chart-container h4 {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin: 0 0 0.75rem 0;
+    font-weight: 500;
+}
+
+.chart-wide {
+    max-width: 100%;
+}
+
+/* ======================
+   Client Analytics Tab Styles
+   ====================== */
+
+#tab-client-analytics .filter-row {
+    margin-bottom: 1.5rem;
+}
+
+#tab-client-analytics .filter-row select {
+    min-width: 250px;
+}
+
+.placeholder-message {
+    text-align: center;
+    padding: 4rem 2rem;
+    color: var(--text-secondary);
+    background: var(--bg-secondary);
+    border-radius: 12px;
+    border: 1px dashed var(--border-color);
+}
+
+.placeholder-message p {
+    font-size: 1.1rem;
+    margin: 0;
+}
+
+#clientSummaryCards {
+    margin-bottom: 2rem;
+}
+
+#clientChartsContainer h3,
+#clientInfraTableContainer h3 {
+    font-size: 1.1rem;
+    margin: 2rem 0 1rem 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+#clientChartsContainer h3:first-child {
+    margin-top: 0;
+    padding-top: 0;
+    border-top: none;
+}
+
+/* Time-independent tab note */
+.time-independent-note {
+    display: inline-block;
+    padding: 0.25rem 0.5rem;
+    background: rgba(245, 158, 11, 0.15);
+    color: var(--accent-yellow);
+    font-size: 0.75rem;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+    font-weight: 500;
+}

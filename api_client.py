@@ -4,8 +4,14 @@ Wrapper for RevGenLabs API endpoints
 """
 
 import requests
+import time
 from typing import Optional
 from config import BASE_URL, WORKSPACES
+
+
+# Retry configuration
+MAX_RETRIES = 3
+RETRY_DELAY_BASE = 2  # seconds, doubles each retry
 
 
 class RevGenLabsAPI:
@@ -22,15 +28,33 @@ class RevGenLabsAPI:
         }
     
     def _get(self, endpoint: str, params: Optional[dict] = None) -> dict:
-        """Make GET request to API"""
+        """Make GET request to API with retry logic"""
         url = f"{self.base_url}{endpoint}"
-        try:
-            response = requests.get(url, headers=self.headers, params=params, timeout=30)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            print(f"[{self.workspace_name}] API error on {endpoint}: {e}")
-            return {"data": []}
+
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = requests.get(url, headers=self.headers, params=params, timeout=60)
+                response.raise_for_status()
+                return response.json()
+            except requests.exceptions.Timeout as e:
+                if attempt < MAX_RETRIES - 1:
+                    delay = RETRY_DELAY_BASE * (2 ** attempt)
+                    print(f"[{self.workspace_name}] Timeout on {endpoint}, retry {attempt + 1}/{MAX_RETRIES} in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    print(f"[{self.workspace_name}] API timeout on {endpoint} after {MAX_RETRIES} retries: {e}")
+                    return {"data": []}
+            except requests.exceptions.RequestException as e:
+                if attempt < MAX_RETRIES - 1 and "5" in str(getattr(e.response, 'status_code', '')):
+                    # Retry on 5xx errors
+                    delay = RETRY_DELAY_BASE * (2 ** attempt)
+                    print(f"[{self.workspace_name}] Server error, retry {attempt + 1}/{MAX_RETRIES} in {delay}s...")
+                    time.sleep(delay)
+                else:
+                    print(f"[{self.workspace_name}] API error on {endpoint}: {e}")
+                    return {"data": []}
+
+        return {"data": []}
     
     def _get_all_pages(self, endpoint: str, params: Optional[dict] = None) -> list:
         """Fetch all pages of paginated endpoint"""

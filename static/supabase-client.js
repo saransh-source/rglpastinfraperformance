@@ -902,6 +902,199 @@ function normalizeInfraType(tag) {
     return tag || 'Unknown';
 }
 
+// ======================
+// Trend & Analytics Functions
+// ======================
+
+/**
+ * Fetch daily trends aggregated across all workspaces/infra
+ * Used for agency-wide trend charts in Overview tab
+ * @param {number} days - Number of days to fetch (default 14)
+ * @returns {Promise<Array>} - Array of daily stats with rates
+ */
+async function fetchDailyTrends(days = 14) {
+    const latestDate = getLatestDataDate();
+    const startDate = getDateNDaysAgo(days);
+
+    const { data, error } = await supabaseClient
+        .from('daily_infra_stats')
+        .select('date, emails_sent, replies, interested, bounces')
+        .gte('date', startDate)
+        .lte('date', latestDate)
+        .order('date', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching daily trends:', error);
+        return [];
+    }
+
+    // Aggregate by date (sum across all workspaces/infra)
+    const byDate = {};
+    for (const row of data) {
+        if (!byDate[row.date]) {
+            byDate[row.date] = { sent: 0, replied: 0, interested: 0, bounced: 0 };
+        }
+        byDate[row.date].sent += row.emails_sent || 0;
+        byDate[row.date].replied += row.replies || 0;
+        byDate[row.date].interested += row.interested || 0;
+        byDate[row.date].bounced += row.bounces || 0;
+    }
+
+    // Calculate rates per date and return sorted array
+    return Object.entries(byDate).map(([date, stats]) => ({
+        date,
+        ...stats,
+        reply_rate: stats.sent > 0 ? (stats.replied / stats.sent) * 100 : 0,
+        positive_rate: stats.sent > 0 ? (stats.interested / stats.sent) * 100 : 0,
+        bounce_rate: stats.sent > 0 ? (stats.bounced / stats.sent) * 100 : 0
+    })).sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Fetch infra trends - daily positive rate per infra type
+ * Used for infra trend chart in Infra Comparison tab
+ * @param {number} days - Number of days to fetch (default 14)
+ * @returns {Promise<Object>} - Object keyed by infra_type with date->stats
+ */
+async function fetchInfraTrends(days = 14) {
+    const latestDate = getLatestDataDate();
+    const startDate = getDateNDaysAgo(days);
+
+    const { data, error } = await supabaseClient
+        .from('daily_infra_stats')
+        .select('date, infra_type, emails_sent, replies, interested')
+        .gte('date', startDate)
+        .lte('date', latestDate)
+        .order('date', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching infra trends:', error);
+        return {};
+    }
+
+    // Group by infra_type -> date -> stats
+    const byInfra = {};
+    for (const row of data) {
+        const infraType = row.infra_type;
+        if (!infraType) continue;
+
+        if (!byInfra[infraType]) byInfra[infraType] = {};
+        if (!byInfra[infraType][row.date]) {
+            byInfra[infraType][row.date] = { sent: 0, replied: 0, interested: 0 };
+        }
+        byInfra[infraType][row.date].sent += row.emails_sent || 0;
+        byInfra[infraType][row.date].replied += row.replies || 0;
+        byInfra[infraType][row.date].interested += row.interested || 0;
+    }
+
+    return byInfra;
+}
+
+/**
+ * Fetch client-specific analytics with daily trends and infra breakdown
+ * Used for Client Analytics tab
+ * @param {string} clientName - The workspace name to fetch
+ * @returns {Promise<Object>} - { byDate, byInfra, totals }
+ */
+async function fetchClientAnalytics(clientName) {
+    const { data, error } = await supabaseClient
+        .from('daily_infra_stats')
+        .select('*')
+        .eq('workspace_name', clientName)
+        .order('date', { ascending: true });
+
+    if (error) {
+        console.error('Error fetching client analytics:', error);
+        return { byDate: {}, byInfra: {}, totals: {} };
+    }
+
+    // Aggregate by date for trend charts
+    const byDate = {};
+    // Aggregate by infra for breakdown
+    const byInfra = {};
+    // Overall totals
+    let totalSent = 0, totalReplied = 0, totalInterested = 0, totalBounced = 0;
+    let totalMailboxes = 0, totalDomains = 0;
+
+    // Get unique dates and find most recent for counts
+    const uniqueDates = new Set(data.map(r => r.date));
+    const mostRecentDate = [...uniqueDates].sort().reverse()[0];
+
+    for (const row of data) {
+        const isLatestDate = row.date === mostRecentDate;
+
+        // By date (for trend charts)
+        if (!byDate[row.date]) {
+            byDate[row.date] = { sent: 0, replied: 0, interested: 0, bounced: 0 };
+        }
+        byDate[row.date].sent += row.emails_sent || 0;
+        byDate[row.date].replied += row.replies || 0;
+        byDate[row.date].interested += row.interested || 0;
+        byDate[row.date].bounced += row.bounces || 0;
+
+        // By infra (for breakdown) - sum stats, use latest date for counts
+        const infraType = row.infra_type;
+        if (!byInfra[infraType]) {
+            byInfra[infraType] = {
+                sent: 0, replied: 0, interested: 0, bounced: 0,
+                mailbox_count: 0, domain_count: 0
+            };
+        }
+        byInfra[infraType].sent += row.emails_sent || 0;
+        byInfra[infraType].replied += row.replies || 0;
+        byInfra[infraType].interested += row.interested || 0;
+        byInfra[infraType].bounced += row.bounces || 0;
+
+        if (isLatestDate) {
+            byInfra[infraType].mailbox_count += row.mailbox_count || 0;
+            byInfra[infraType].domain_count += row.domain_count || 0;
+            totalMailboxes += row.mailbox_count || 0;
+            totalDomains += row.domain_count || 0;
+        }
+
+        // Accumulate totals
+        totalSent += row.emails_sent || 0;
+        totalReplied += row.replies || 0;
+        totalInterested += row.interested || 0;
+        totalBounced += row.bounces || 0;
+    }
+
+    // Calculate rates for byInfra
+    for (const m of Object.values(byInfra)) {
+        m.reply_rate = m.sent > 0 ? (m.replied / m.sent) * 100 : 0;
+        m.positive_rate = m.sent > 0 ? (m.interested / m.sent) * 100 : 0;
+        m.bounce_rate = m.sent > 0 ? (m.bounced / m.sent) * 100 : 0;
+    }
+
+    // Calculate totals
+    const numDays = uniqueDates.size || 1;
+    const totals = {
+        sent: totalSent,
+        replied: totalReplied,
+        interested: totalInterested,
+        bounced: totalBounced,
+        mailbox_count: totalMailboxes,
+        domain_count: totalDomains,
+        reply_rate: totalSent > 0 ? (totalReplied / totalSent) * 100 : 0,
+        positive_rate: totalSent > 0 ? (totalInterested / totalSent) * 100 : 0,
+        bounce_rate: totalSent > 0 ? (totalBounced / totalSent) * 100 : 0,
+        positives_per_day: totalInterested / numDays,
+        days: numDays
+    };
+
+    return { byDate, byInfra, totals };
+}
+
+/**
+ * Fetch latest snapshot data only (single day) for time-independent tabs
+ * Used for Warmup Status and Cost Projections tabs
+ * @returns {Promise<Object>} - Same format as fetchInfraPerformance but for single day
+ */
+async function fetchLatestInfraSnapshot() {
+    const latestDate = getLatestDataDate();
+    return await fetchInfraPerformance(latestDate, latestDate);
+}
+
 // Export functions for use in app.js
 window.SupabaseClient = {
     fetchInfraPerformance,
@@ -910,6 +1103,10 @@ window.SupabaseClient = {
     fetchDomainHealth,
     fetchClients,
     fetchWorkspaces,
+    fetchDailyTrends,
+    fetchInfraTrends,
+    fetchClientAnalytics,
+    fetchLatestInfraSnapshot,
     getDateNDaysAgo,
     getLatestDataDate,
     getYesterdayDate,
