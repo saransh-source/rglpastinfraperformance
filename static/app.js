@@ -1447,9 +1447,12 @@ function setLoading(isLoading) {
     }
 
     const loadingEl = document.getElementById('loading');
-    loadingEl.style.display = isLoading ? 'block' : 'none';
-    document.getElementById('mainTabNav').style.display = isLoading ? 'none' : 'flex';
-    document.getElementById('footer').style.display = isLoading ? 'none' : 'block';
+    const mainTabNav = document.getElementById('mainTabNav');
+    const footer = document.getElementById('footer');
+
+    if (loadingEl) loadingEl.style.display = isLoading ? 'block' : 'none';
+    if (mainTabNav) mainTabNav.style.display = isLoading ? 'none' : 'flex';
+    if (footer) footer.style.display = isLoading ? 'none' : 'block';
 
     // Show active tab content
     if (!isLoading) {
@@ -1491,20 +1494,26 @@ function showError(message, canRetry = true) {
     }
 
     setLoading(false);
-    document.getElementById('loading').style.display = 'block';
-    document.getElementById('mainTabNav').style.display = 'none';
+
+    const loadingEl = document.getElementById('loading');
+    const mainTabNav = document.getElementById('mainTabNav');
+
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (mainTabNav) mainTabNav.style.display = 'none';
 
     const retryButton = canRetry ? `
         <button class="retry-btn" onclick="retryLoad()">Retry Now</button>
     ` : '';
 
-    document.getElementById('loading').innerHTML = `
-        <div class="error">
-            <p>⚠️ ${message}</p>
-            <p class="hint">This may be due to a slow database connection or network issue.</p>
-            ${retryButton}
-        </div>
-    `;
+    if (loadingEl) {
+        loadingEl.innerHTML = `
+            <div class="error">
+                <p>⚠️ ${message}</p>
+                <p class="hint">This may be due to a slow database connection or network issue.</p>
+                ${retryButton}
+            </div>
+        `;
+    }
 }
 
 // Retry loading data
