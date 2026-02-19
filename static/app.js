@@ -1,7 +1,7 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v8 (Cost projections: always use last 7-day positive rate, detailed breakdown)
+// Version: 2026-02-19-v9 (Fix infra type name mapping for cost projections)
 
-console.log('[APP VERSION] 2026-02-19-v8 - Cost projections: always use last 7-day positive rate, detailed breakdown');
+console.log('[APP VERSION] 2026-02-19-v9 - Fix infra type name mapping for cost projections');
 
 let currentPeriod = '14d';
 let currentData = null;
@@ -1313,6 +1313,17 @@ function updateWarmupTableFromSnapshot() {
 }
 
 // Fetch last 7 days positive rates for cost projections
+// Map raw database infra type names to display names used in cost projections
+const INFRA_TYPE_TO_DISPLAY = {
+    'MD SMTP': 'Maldoso',
+    'Maldoso': 'Maldoso',
+    'GR': 'Google Reseller',
+    'GR - N': 'Google Reseller',
+    'Google Reseller': 'Google Reseller',
+    'AO': 'Aged Outlook',
+    'Aged Outlook': 'Aged Outlook'
+};
+
 async function fetchLast7DaysPositiveRates() {
     if (!window.SupabaseClient) return {};
 
@@ -1321,16 +1332,31 @@ async function fetchLast7DaysPositiveRates() {
         if (!trends || Object.keys(trends).length === 0) return {};
 
         // Calculate 7-day aggregated positive rate per infra type
-        const rates = {};
+        // Group by display name (e.g., combine GR and GR - N into "Google Reseller")
+        const aggregatedByDisplay = {};
+
         for (const [infraType, dateData] of Object.entries(trends)) {
-            let totalSent = 0;
-            let totalInterested = 0;
-            for (const stats of Object.values(dateData)) {
-                totalSent += stats.sent || 0;
-                totalInterested += stats.interested || 0;
+            const displayName = INFRA_TYPE_TO_DISPLAY[infraType];
+            if (!displayName) continue; // Skip infra types not in cost projections
+
+            if (!aggregatedByDisplay[displayName]) {
+                aggregatedByDisplay[displayName] = { sent: 0, interested: 0 };
             }
-            rates[infraType] = totalSent > 0 ? (totalInterested / totalSent) * 100 : 0;
+
+            for (const stats of Object.values(dateData)) {
+                aggregatedByDisplay[displayName].sent += stats.sent || 0;
+                aggregatedByDisplay[displayName].interested += stats.interested || 0;
+            }
         }
+
+        // Calculate rates
+        const rates = {};
+        for (const [displayName, totals] of Object.entries(aggregatedByDisplay)) {
+            rates[displayName] = totals.sent > 0 ? (totals.interested / totals.sent) * 100 : 0;
+        }
+
+        console.log('Raw infra trends:', Object.keys(trends));
+        console.log('Mapped positive rates:', rates);
         return rates;
     } catch (error) {
         console.error('Error fetching 7-day positive rates:', error);
