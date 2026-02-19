@@ -21,7 +21,7 @@
             <p>Loading data...</p>
         </div>
 
-        <!-- HTML VERSION: 2026-02-19-v3 - Restructured tabs -->
+        <!-- HTML VERSION: 2026-02-19-v4 - Fixed trend charts with separate line charts -->
         <!-- Main Tab Navigation -->
         <div id="mainTabNav" class="main-tab-nav" style="display: none;">
             <button class="main-tab-btn active" data-main-tab="infra">Infra</button>
@@ -129,12 +129,18 @@
                     </div>
                 </div>
 
-                <!-- Aggregated Performance Trends -->
+                <!-- Performance Trends (Weekly, 6-week rolling) -->
                 <div class="charts-section">
-                    <h3>Performance Trends (3-Day Averages)</h3>
-                    <div class="chart-container" style="max-width: 700px;">
-                        <h4>Reply Rate & Positive Rate</h4>
-                        <canvas id="dailyPositiveRateChart"></canvas>
+                    <h3>Performance Trends (Last 6 Weeks)</h3>
+                    <div class="charts-grid">
+                        <div class="chart-container">
+                            <h4>Reply Rate</h4>
+                            <canvas id="dailyReplyRateChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h4>Positive Rate</h4>
+                            <canvas id="dailyPositiveRateChart"></canvas>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -380,12 +386,18 @@
                         </div>
                     </div>
 
-                    <!-- Client Performance Trends -->
+                    <!-- Client Performance Trends (Weekly, 6-week rolling) -->
                     <div class="charts-section">
-                        <h3>Performance Trends (3-Day Averages)</h3>
-                        <div class="chart-container" style="max-width: 700px;">
-                            <h4>Reply Rate & Positive Rate</h4>
-                            <canvas id="clientDailyPositiveRateChart"></canvas>
+                        <h3>Performance Trends (Last 6 Weeks)</h3>
+                        <div class="charts-grid">
+                            <div class="chart-container">
+                                <h4>Reply Rate</h4>
+                                <canvas id="clientDailyReplyRateChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <h4>Positive Rate</h4>
+                                <canvas id="clientDailyPositiveRateChart"></canvas>
+                            </div>
                         </div>
                     </div>
 

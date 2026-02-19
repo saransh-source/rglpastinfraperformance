@@ -1,7 +1,7 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v6 (UI refinements: centered subtabs, 1D button, aggregated trends, removed TLD)
+// Version: 2026-02-19-v7 (Fixed trend charts: 6-week fixed range, line charts, separate reply/positive)
 
-console.log('[APP VERSION] 2026-02-19-v6 - UI refinements: centered subtabs, 1D button, aggregated trends, removed TLD');
+console.log('[APP VERSION] 2026-02-19-v7 - Fixed trend charts: 6-week fixed range, line charts, separate reply/positive');
 
 let currentPeriod = '14d';
 let currentData = null;
@@ -11,10 +11,12 @@ let workspaceMap = {};
 // Chart instances (for cleanup/update)
 let infraSendsChart = null;
 let infraPositiveRateChart = null;
+let dailyReplyRateChart = null;
 let dailyPositiveRateChart = null;
 let infraComparisonTrendChart = null;
 let clientInfraSendsChart = null;
 let clientInfraPositiveRateChart = null;
+let clientDailyReplyRateChart = null;
 let clientDailyPositiveRateChart = null;
 
 // Main tab and subtab state
@@ -654,54 +656,87 @@ function updateInfraCharts(byInfra) {
     }
 }
 
-// Update Aggregated Trends Charts (3-day buckets)
+// Fixed number of weeks for trend charts (independent of date selection)
+const TREND_WEEKS = 6;
+const TREND_DAYS = TREND_WEEKS * 7;
+
+// Update Aggregated Trends Charts (weekly buckets, line charts)
+// Always fetches last 6 weeks regardless of selected date range
 async function updateDailyTrendsCharts() {
     if (!window.SupabaseClient) return;
 
-    const days = PERIOD_DAYS[currentPeriod] || 14;
-    const trends = await window.SupabaseClient.fetchDailyTrends(days);
+    // Always fetch 6 weeks of data for trends
+    const trends = await window.SupabaseClient.fetchDailyTrends(TREND_DAYS);
 
     if (!trends || trends.length === 0) return;
 
-    // Aggregate into 3-day buckets (or 7-day for longer periods)
-    const bucketDays = days >= 21 ? 7 : 3;
-    const aggregated = aggregateByPeriod(trends, bucketDays);
+    // Aggregate into weekly buckets (7-day)
+    const aggregated = aggregateByPeriod(trends, 7);
 
     const labels = aggregated.map(a => a.label);
     const replyRates = aggregated.map(a => a.reply_rate);
     const positiveRates = aggregated.map(a => a.positive_rate);
 
-    // Aggregated Rates Chart (Reply Rate & +ve Rate)
-    const rateCtx = document.getElementById('dailyPositiveRateChart');
-    if (rateCtx) {
-        dailyPositiveRateChart = destroyChart(dailyPositiveRateChart);
-        dailyPositiveRateChart = new Chart(rateCtx, {
-            type: 'bar',
+    // Reply Rate Chart (Line)
+    const replyCtx = document.getElementById('dailyReplyRateChart');
+    if (replyCtx) {
+        dailyReplyRateChart = destroyChart(dailyReplyRateChart);
+        dailyReplyRateChart = new Chart(replyCtx, {
+            type: 'line',
             data: {
                 labels: labels,
-                datasets: [
-                    {
-                        label: 'Reply Rate %',
-                        data: replyRates,
-                        backgroundColor: '#3b82f6'
-                    },
-                    {
-                        label: '+ve Rate %',
-                        data: positiveRates,
-                        backgroundColor: '#10b981'
-                    }
-                ]
+                datasets: [{
+                    label: 'Reply Rate %',
+                    data: replyRates,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#3b82f6'
+                }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'top' } },
+                plugins: { legend: { display: false } },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        ticks: {
-                            callback: (value) => value.toFixed(2) + '%'
-                        }
+                        ticks: { callback: (v) => v.toFixed(1) + '%' }
+                    }
+                }
+            }
+        });
+    }
+
+    // Positive Rate Chart (Line)
+    const positiveCtx = document.getElementById('dailyPositiveRateChart');
+    if (positiveCtx) {
+        dailyPositiveRateChart = destroyChart(dailyPositiveRateChart);
+        dailyPositiveRateChart = new Chart(positiveCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '+ve Rate %',
+                    data: positiveRates,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#10b981'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { callback: (v) => v.toFixed(3) + '%' }
                     }
                 }
             }
@@ -710,37 +745,44 @@ async function updateDailyTrendsCharts() {
 }
 
 // Update Infra Comparison Trend Chart (multi-line by infra type)
+// Always fetches last 6 weeks regardless of selected date range
 async function updateInfraComparisonTrendChart() {
     if (!window.SupabaseClient) return;
 
-    const days = PERIOD_DAYS[currentPeriod] || 14;
-    const infraTrends = await window.SupabaseClient.fetchInfraTrends(days);
+    // Always fetch 6 weeks of data for trends
+    const infraTrends = await window.SupabaseClient.fetchInfraTrends(TREND_DAYS);
 
-    if (!infraTrends || infraTrends.length === 0) return;
+    // infraTrends is an object: { infraType: { date: { sent, replied, interested } } }
+    if (!infraTrends || Object.keys(infraTrends).length === 0) {
+        console.log('No infra trends data available');
+        return;
+    }
 
-    // Get unique dates and infra types
-    const allDates = [...new Set(infraTrends.map(t => t.date))].sort();
-    const allInfraTypes = [...new Set(infraTrends.map(t => t.infra_type))];
+    const allInfraTypes = Object.keys(infraTrends);
 
-    // Bucket size for aggregation
-    const bucketDays = days >= 21 ? 7 : 3;
+    // Get all unique dates across all infra types
+    const allDates = new Set();
+    for (const infraType of allInfraTypes) {
+        Object.keys(infraTrends[infraType]).forEach(d => allDates.add(d));
+    }
+    const sortedDates = [...allDates].sort();
 
     // Build data per infra type
     const datasets = [];
     for (const infra of allInfraTypes) {
         // Get daily data for this infra
-        const infraData = allDates.map(date => {
-            const row = infraTrends.find(t => t.date === date && t.infra_type === infra);
+        const infraData = sortedDates.map(date => {
+            const dayStats = infraTrends[infra][date] || { sent: 0, replied: 0, interested: 0 };
             return {
                 date: date,
-                sent: row?.sent || 0,
-                replied: row?.replied || 0,
-                interested: row?.interested || 0
+                sent: dayStats.sent || 0,
+                replied: dayStats.replied || 0,
+                interested: dayStats.interested || 0
             };
         });
 
-        // Aggregate into buckets
-        const aggregated = aggregateByPeriod(infraData, bucketDays);
+        // Aggregate into weekly buckets
+        const aggregated = aggregateByPeriod(infraData, 7);
 
         datasets.push({
             label: infra,
@@ -748,13 +790,14 @@ async function updateInfraComparisonTrendChart() {
             borderColor: infraColors[infra] || '#6b7280',
             backgroundColor: (infraColors[infra] || '#6b7280') + '20',
             fill: false,
-            tension: 0.3
+            tension: 0.3,
+            pointRadius: 3
         });
     }
 
-    // Get labels from first dataset (all should have same buckets)
-    const firstInfraData = allDates.map(d => ({ date: d }));
-    const labels = aggregateByPeriod(firstInfraData, bucketDays).map(a => a.label);
+    // Get labels from aggregated data
+    const firstInfraData = sortedDates.map(d => ({ date: d }));
+    const labels = aggregateByPeriod(firstInfraData, 7).map(a => a.label);
 
     const ctx = document.getElementById('infraComparisonTrendChart');
     if (ctx) {
@@ -773,7 +816,7 @@ async function updateInfraComparisonTrendChart() {
                         beginAtZero: true,
                         title: { display: true, text: '+ve Rate %' },
                         ticks: {
-                            callback: (v) => v.toFixed(2) + '%'
+                            callback: (v) => v.toFixed(3) + '%'
                         }
                     }
                 }
@@ -841,8 +884,8 @@ async function loadClientAnalytics(clientName) {
     // Update infra charts
     updateClientInfraCharts(analytics.byInfra);
 
-    // Update daily trends charts
-    updateClientDailyTrendsCharts(analytics.byDate);
+    // Update daily trends charts (fetches 6 weeks independently)
+    updateClientDailyTrendsCharts(clientName);
 }
 
 function updateClientInfraTable(byInfra) {
@@ -935,9 +978,20 @@ function updateClientInfraCharts(byInfra) {
     }
 }
 
-function updateClientDailyTrendsCharts(byDate) {
-    if (!byDate) return;
+// Update client trends - always fetches 6 weeks of data
+async function updateClientDailyTrendsCharts(clientName) {
+    if (!clientName || !window.SupabaseClient) return;
 
+    // Always fetch 6 weeks of data for trends (independent of date selection)
+    const end = window.SupabaseClient.getLatestDataDate();
+    const start = window.SupabaseClient.getDateNDaysAgo(TREND_DAYS);
+
+    console.log(`Fetching client trends for ${clientName}: ${start} to ${end}`);
+    const analytics = await window.SupabaseClient.fetchClientAnalytics(clientName, start, end);
+
+    if (!analytics || !analytics.byDate) return;
+
+    const byDate = analytics.byDate;
     const sortedDates = Object.keys(byDate).sort();
 
     // Convert to array format for aggregation
@@ -948,45 +1002,73 @@ function updateClientDailyTrendsCharts(byDate) {
         interested: byDate[d].interested || 0
     }));
 
-    // Aggregate into 3-day buckets
-    const bucketDays = sortedDates.length >= 21 ? 7 : 3;
-    const aggregated = aggregateByPeriod(dailyData, bucketDays);
+    // Aggregate into weekly buckets
+    const aggregated = aggregateByPeriod(dailyData, 7);
 
     const labels = aggregated.map(a => a.label);
     const replyRates = aggregated.map(a => a.reply_rate);
     const positiveRates = aggregated.map(a => a.positive_rate);
 
-    // Aggregated Rates Chart (Reply Rate & +ve Rate)
-    const rateCtx = document.getElementById('clientDailyPositiveRateChart');
-    if (rateCtx) {
-        clientDailyPositiveRateChart = destroyChart(clientDailyPositiveRateChart);
-        clientDailyPositiveRateChart = new Chart(rateCtx, {
-            type: 'bar',
+    // Reply Rate Chart (Line)
+    const replyCtx = document.getElementById('clientDailyReplyRateChart');
+    if (replyCtx) {
+        clientDailyReplyRateChart = destroyChart(clientDailyReplyRateChart);
+        clientDailyReplyRateChart = new Chart(replyCtx, {
+            type: 'line',
             data: {
                 labels: labels,
-                datasets: [
-                    {
-                        label: 'Reply Rate %',
-                        data: replyRates,
-                        backgroundColor: '#3b82f6'
-                    },
-                    {
-                        label: '+ve Rate %',
-                        data: positiveRates,
-                        backgroundColor: '#10b981'
-                    }
-                ]
+                datasets: [{
+                    label: 'Reply Rate %',
+                    data: replyRates,
+                    borderColor: '#3b82f6',
+                    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#3b82f6'
+                }]
             },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
-                plugins: { legend: { position: 'top' } },
+                plugins: { legend: { display: false } },
                 scales: {
                     y: {
                         beginAtZero: true,
-                        ticks: {
-                            callback: (value) => value.toFixed(2) + '%'
-                        }
+                        ticks: { callback: (v) => v.toFixed(1) + '%' }
+                    }
+                }
+            }
+        });
+    }
+
+    // Positive Rate Chart (Line)
+    const positiveCtx = document.getElementById('clientDailyPositiveRateChart');
+    if (positiveCtx) {
+        clientDailyPositiveRateChart = destroyChart(clientDailyPositiveRateChart);
+        clientDailyPositiveRateChart = new Chart(positiveCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '+ve Rate %',
+                    data: positiveRates,
+                    borderColor: '#10b981',
+                    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointBackgroundColor: '#10b981'
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { callback: (v) => v.toFixed(3) + '%' }
                     }
                 }
             }
