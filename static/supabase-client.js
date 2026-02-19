@@ -5,8 +5,17 @@
 const SUPABASE_URL = 'https://fxxjfgfnrywffjmxoadl.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4eGpmZ2Zucnl3ZmZqbXhvYWRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MTg4MzUsImV4cCI6MjA3OTE5NDgzNX0.i3CdO1d81qn8IuVM9nbCiFseIaVqPpNAIuVVE9JH8U8';
 
-// Initialize Supabase client - use the global supabase from CDN
-const supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Initialize Supabase client with error handling
+let supabaseClient = null;
+try {
+    if (typeof window.supabase === 'undefined') {
+        throw new Error('Supabase SDK not loaded');
+    }
+    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    console.log('Supabase client initialized successfully');
+} catch (error) {
+    console.error('Failed to initialize Supabase client:', error);
+}
 
 // Tracked infra types (matching config.py - raw tag names, no merging)
 const TRACKED_INFRA_TYPES = [

@@ -8,8 +8,33 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script>
-        // Debug: Check if Supabase loaded
-        console.log('Supabase SDK loaded:', typeof window.supabase);
+        // Debug: Check if dependencies loaded
+        console.log('Chart.js loaded:', typeof Chart !== 'undefined');
+        console.log('Supabase SDK loaded:', typeof window.supabase !== 'undefined');
+
+        // Check for missing dependencies after a delay
+        setTimeout(() => {
+            if (typeof Chart === 'undefined') {
+                console.error('Chart.js failed to load from CDN');
+                document.getElementById('loading').innerHTML = `
+                    <div class="error">
+                        <p>Failed to load Chart.js from CDN</p>
+                        <p class="hint">Please check your internet connection and refresh the page.</p>
+                        <button class="retry-btn" onclick="location.reload()">Refresh Page</button>
+                    </div>
+                `;
+            }
+            if (typeof window.supabase === 'undefined') {
+                console.error('Supabase SDK failed to load from CDN');
+                document.getElementById('loading').innerHTML = `
+                    <div class="error">
+                        <p>Failed to load Supabase SDK from CDN</p>
+                        <p class="hint">Please check your internet connection and refresh the page.</p>
+                        <button class="retry-btn" onclick="location.reload()">Refresh Page</button>
+                    </div>
+                `;
+            }
+        }, 5000);
     </script>
 </head>
 <body>
@@ -603,5 +628,28 @@
 
     <script src="/static/supabase-client.js"></script>
     <script src="/static/app.js"></script>
+    <script>
+        // Global error handler to catch any uncaught errors
+        window.onerror = function(msg, url, lineNo, columnNo, error) {
+            console.error('Global error:', msg, url, lineNo);
+            // Show error to user if still loading
+            const loadingEl = document.getElementById('loading');
+            if (loadingEl && loadingEl.style.display !== 'none') {
+                loadingEl.innerHTML = `
+                    <div class="error">
+                        <p>An error occurred while loading</p>
+                        <p class="hint">${msg}</p>
+                        <button class="retry-btn" onclick="location.reload()">Refresh Page</button>
+                    </div>
+                `;
+            }
+            return false;
+        };
+
+        // Also catch unhandled promise rejections
+        window.onunhandledrejection = function(event) {
+            console.error('Unhandled promise rejection:', event.reason);
+        };
+    </script>
 </body>
 </html>
