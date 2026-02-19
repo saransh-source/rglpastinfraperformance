@@ -234,6 +234,7 @@ function calculateProjectionsClientSide(byInfra) {
 // Tab switching
 // Switch main tab (Infra, Clients, Bounces, Domains)
 function switchMainTab(mainTabId) {
+    console.log('switchMainTab called with:', mainTabId);
     currentMainTab = mainTabId;
 
     // Update main tab buttons
@@ -242,8 +243,14 @@ function switchMainTab(mainTabId) {
     });
 
     // Show/hide main tab content
-    document.querySelectorAll('.main-tab-content').forEach(content => {
-        content.style.display = content.id === `main-tab-${mainTabId}` ? 'block' : 'none';
+    const mainTabContents = document.querySelectorAll('.main-tab-content');
+    console.log('Found main-tab-content elements:', mainTabContents.length);
+    mainTabContents.forEach(content => {
+        const shouldShow = content.id === `main-tab-${mainTabId}`;
+        content.style.display = shouldShow ? 'block' : 'none';
+        if (shouldShow) {
+            console.log('Showing tab:', content.id);
+        }
     });
 
     // If bounces tab, load bounce data
@@ -274,9 +281,15 @@ function switchSubtab(subtabId) {
 
 // Show default tabs on load
 function showDefaultTabs() {
+    console.log('showDefaultTabs called');
     // Show main tab nav
     const mainTabNav = document.getElementById('mainTabNav');
-    if (mainTabNav) mainTabNav.style.display = 'flex';
+    if (mainTabNav) {
+        mainTabNav.style.display = 'flex';
+        console.log('mainTabNav set to flex');
+    } else {
+        console.error('mainTabNav element not found!');
+    }
 
     // Show default main tab (infra)
     switchMainTab('infra');
@@ -284,6 +297,7 @@ function showDefaultTabs() {
     // Show default subtabs
     switchSubtab('infra-overview');
     switchSubtab('clients-overview');
+    console.log('showDefaultTabs completed');
 }
 
 // Update overview cards
