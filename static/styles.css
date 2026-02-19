@@ -1017,6 +1017,7 @@ code {
 
 .subtab-nav {
     display: flex;
+    justify-content: center;
     gap: 0.25rem;
     border-bottom: 1px solid var(--border-color);
     margin-bottom: 1.5rem;

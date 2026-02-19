@@ -1,7 +1,7 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v5 (Fixed bounce dates, separate client date picker)
+// Version: 2026-02-19-v6 (UI refinements: centered subtabs, 1D button, aggregated trends, removed TLD)
 
-console.log('[APP VERSION] 2026-02-19-v5 - Fixed bounce dates, separate client date picker');
+console.log('[APP VERSION] 2026-02-19-v6 - UI refinements: centered subtabs, 1D button, aggregated trends, removed TLD');
 
 let currentPeriod = '14d';
 let currentData = null;
@@ -11,11 +11,10 @@ let workspaceMap = {};
 // Chart instances (for cleanup/update)
 let infraSendsChart = null;
 let infraPositiveRateChart = null;
-let dailySendsChart = null;
 let dailyPositiveRateChart = null;
+let infraComparisonTrendChart = null;
 let clientInfraSendsChart = null;
 let clientInfraPositiveRateChart = null;
-let clientDailySendsChart = null;
 let clientDailyPositiveRateChart = null;
 
 // Main tab and subtab state
@@ -52,6 +51,7 @@ let currentRetryCount = 0;
 
 // Period to days mapping
 const PERIOD_DAYS = {
+    '1d': 1,
     '3d': 3,
     '7d': 7,
     '14d': 14,
@@ -109,6 +109,39 @@ function formatNumber(num) {
 function formatCurrency(num) {
     if (num == null || num === 0) return '-';
     return '$' + num.toLocaleString(undefined, { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+}
+
+// Aggregate daily data into N-day buckets (e.g., 3-day or 7-day)
+function aggregateByPeriod(dailyData, bucketDays = 3) {
+    if (!dailyData || dailyData.length === 0) return [];
+
+    const buckets = [];
+    for (let i = 0; i < dailyData.length; i += bucketDays) {
+        const chunk = dailyData.slice(i, i + bucketDays);
+        const totalSent = chunk.reduce((sum, d) => sum + (d.sent || 0), 0);
+        const totalReplied = chunk.reduce((sum, d) => sum + (d.replied || 0), 0);
+        const totalInterested = chunk.reduce((sum, d) => sum + (d.interested || 0), 0);
+
+        const replyRate = totalSent > 0 ? (totalReplied / totalSent) * 100 : 0;
+        const positiveRate = totalSent > 0 ? (totalInterested / totalSent) * 100 : 0;
+
+        // Label: first date - last date in bucket
+        const startDate = chunk[0].date;
+        const endDate = chunk[chunk.length - 1].date;
+        const label = chunk.length > 1
+            ? `${startDate.slice(5)} - ${endDate.slice(5)}`
+            : startDate.slice(5);
+
+        buckets.push({
+            label,
+            reply_rate: replyRate,
+            positive_rate: positiveRate,
+            sent: totalSent,
+            replied: totalReplied,
+            interested: totalInterested
+        });
+    }
+    return buckets;
 }
 
 // Fetch data from Supabase
@@ -353,75 +386,6 @@ function updateClientOverviewTable(byClient) {
             <td>${positiveReplyRate.toFixed(2)}%</td>
             <td>${bounceRate.toFixed(2)}%</td>
             <td class="highlight-col">${positivesPerDay.toFixed(1)}</td>
-        `;
-        tbody.appendChild(row);
-    }
-}
-
-// Update TLD tables
-function updateTldTables(byTld, byInfraTld) {
-    const tldTbody = document.getElementById('tldTableBody');
-    if (tldTbody) {
-        tldTbody.innerHTML = '';
-        const sortedTld = Object.entries(byTld || {}).sort((a, b) => b[1].sent - a[1].sent);
-
-        for (const [tld, m] of sortedTld) {
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td>${tld}</td>
-                <td>${m.mailbox_count || 0}</td>
-                <td>${m.domain_count || 0}</td>
-                <td>${formatNumber(m.sent)}</td>
-                <td>${formatNumber(m.replied)}</td>
-                <td class="highlight-col">${m.interested || 0}</td>
-                <td>${(m.reply_rate || 0).toFixed(2)}%</td>
-                <td class="highlight-col">${(m.positive_rate || 0).toFixed(3)}%</td>
-                <td>${(m.positive_reply_rate || 0).toFixed(2)}%</td>
-                <td>${(m.bounce_rate || 0).toFixed(2)}%</td>
-            `;
-            tldTbody.appendChild(row);
-        }
-    }
-
-    // Populate infra filter
-    const infraFilter = document.getElementById('infraTldFilter');
-    if (infraFilter && byInfraTld) {
-        const currentValue = infraFilter.value;
-        infraFilter.innerHTML = '<option value="all">All Infra Types</option>';
-        Object.keys(byInfraTld).sort().forEach(infra => {
-            infraFilter.innerHTML += `<option value="${infra}">${infra}</option>`;
-        });
-        infraFilter.value = currentValue || 'all';
-    }
-
-    updateInfraTldTable(byInfraTld, infraFilter?.value || 'all');
-}
-
-function updateInfraTldTable(byInfraTld, filter) {
-    const tbody = document.getElementById('infraTldTableBody');
-    if (!tbody || !byInfraTld) return;
-    tbody.innerHTML = '';
-
-    const rows = [];
-    for (const [infraType, tldData] of Object.entries(byInfraTld)) {
-        if (filter !== 'all' && infraType !== filter) continue;
-        for (const [tld, m] of Object.entries(tldData)) {
-            rows.push({ infraType, tld, ...m });
-        }
-    }
-
-    rows.sort((a, b) => b.sent - a.sent);
-
-    for (const r of rows) {
-        const row = document.createElement('tr');
-        row.innerHTML = `
-            <td class="${getInfraClass(r.infraType)}">${r.infraType}</td>
-            <td>${r.tld}</td>
-            <td>${r.mailbox_count || 0}</td>
-            <td>${formatNumber(r.sent)}</td>
-            <td>${(r.reply_rate || 0).toFixed(2)}%</td>
-            <td class="highlight-col">${(r.positive_rate || 0).toFixed(3)}%</td>
-            <td>${(r.bounce_rate || 0).toFixed(2)}%</td>
         `;
         tbody.appendChild(row);
     }
@@ -690,7 +654,7 @@ function updateInfraCharts(byInfra) {
     }
 }
 
-// Update Daily Trends Charts
+// Update Aggregated Trends Charts (3-day buckets)
 async function updateDailyTrendsCharts() {
     if (!window.SupabaseClient) return;
 
@@ -699,35 +663,32 @@ async function updateDailyTrendsCharts() {
 
     if (!trends || trends.length === 0) return;
 
-    const labels = trends.map(t => t.date.slice(5)); // MM-DD format
-    const sends = trends.map(t => t.sent);
-    const replies = trends.map(t => t.replied);
-    const positiveRates = trends.map(t => t.positive_rate);
+    // Aggregate into 3-day buckets (or 7-day for longer periods)
+    const bucketDays = days >= 21 ? 7 : 3;
+    const aggregated = aggregateByPeriod(trends, bucketDays);
 
-    // Daily Sends & Replies Chart
-    const sendsCtx = document.getElementById('dailySendsChart');
-    if (sendsCtx) {
-        dailySendsChart = destroyChart(dailySendsChart);
-        dailySendsChart = new Chart(sendsCtx, {
-            type: 'line',
+    const labels = aggregated.map(a => a.label);
+    const replyRates = aggregated.map(a => a.reply_rate);
+    const positiveRates = aggregated.map(a => a.positive_rate);
+
+    // Aggregated Rates Chart (Reply Rate & +ve Rate)
+    const rateCtx = document.getElementById('dailyPositiveRateChart');
+    if (rateCtx) {
+        dailyPositiveRateChart = destroyChart(dailyPositiveRateChart);
+        dailyPositiveRateChart = new Chart(rateCtx, {
+            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Sends',
-                        data: sends,
-                        borderColor: '#3b82f6',
-                        backgroundColor: '#3b82f620',
-                        fill: true,
-                        tension: 0.3
+                        label: 'Reply Rate %',
+                        data: replyRates,
+                        backgroundColor: '#3b82f6'
                     },
                     {
-                        label: 'Replies',
-                        data: replies,
-                        borderColor: '#10b981',
-                        backgroundColor: '#10b98120',
-                        fill: true,
-                        tension: 0.3
+                        label: '+ve Rate %',
+                        data: positiveRates,
+                        backgroundColor: '#10b981'
                     }
                 ]
             },
@@ -735,37 +696,84 @@ async function updateDailyTrendsCharts() {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { legend: { position: 'top' } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-
-    // Daily Positive Rate Chart
-    const rateCtx = document.getElementById('dailyPositiveRateChart');
-    if (rateCtx) {
-        dailyPositiveRateChart = destroyChart(dailyPositiveRateChart);
-        dailyPositiveRateChart = new Chart(rateCtx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '+ve Rate %',
-                    data: positiveRates,
-                    borderColor: '#8b5cf6',
-                    backgroundColor: '#8b5cf620',
-                    fill: true,
-                    tension: 0.3
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
                 scales: {
                     y: {
                         beginAtZero: true,
                         ticks: {
                             callback: (value) => value.toFixed(2) + '%'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Update Infra Comparison Trend Chart (multi-line by infra type)
+async function updateInfraComparisonTrendChart() {
+    if (!window.SupabaseClient) return;
+
+    const days = PERIOD_DAYS[currentPeriod] || 14;
+    const infraTrends = await window.SupabaseClient.fetchInfraTrends(days);
+
+    if (!infraTrends || infraTrends.length === 0) return;
+
+    // Get unique dates and infra types
+    const allDates = [...new Set(infraTrends.map(t => t.date))].sort();
+    const allInfraTypes = [...new Set(infraTrends.map(t => t.infra_type))];
+
+    // Bucket size for aggregation
+    const bucketDays = days >= 21 ? 7 : 3;
+
+    // Build data per infra type
+    const datasets = [];
+    for (const infra of allInfraTypes) {
+        // Get daily data for this infra
+        const infraData = allDates.map(date => {
+            const row = infraTrends.find(t => t.date === date && t.infra_type === infra);
+            return {
+                date: date,
+                sent: row?.sent || 0,
+                replied: row?.replied || 0,
+                interested: row?.interested || 0
+            };
+        });
+
+        // Aggregate into buckets
+        const aggregated = aggregateByPeriod(infraData, bucketDays);
+
+        datasets.push({
+            label: infra,
+            data: aggregated.map(a => a.positive_rate),
+            borderColor: infraColors[infra] || '#6b7280',
+            backgroundColor: (infraColors[infra] || '#6b7280') + '20',
+            fill: false,
+            tension: 0.3
+        });
+    }
+
+    // Get labels from first dataset (all should have same buckets)
+    const firstInfraData = allDates.map(d => ({ date: d }));
+    const labels = aggregateByPeriod(firstInfraData, bucketDays).map(a => a.label);
+
+    const ctx = document.getElementById('infraComparisonTrendChart');
+    if (ctx) {
+        infraComparisonTrendChart = destroyChart(infraComparisonTrendChart);
+        infraComparisonTrendChart = new Chart(ctx, {
+            type: 'line',
+            data: { labels, datasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top' }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: '+ve Rate %' },
+                        ticks: {
+                            callback: (v) => v.toFixed(2) + '%'
                         }
                     }
                 }
@@ -806,7 +814,13 @@ async function loadClientAnalytics(clientName) {
     document.getElementById('clientOverviewSection').style.display = 'block';
     document.getElementById('selectedClientName').textContent = clientName + ' - Overview';
 
-    const analytics = await window.SupabaseClient.fetchClientAnalytics(clientName);
+    // Use client-specific date range
+    const days = PERIOD_DAYS[clientPeriod] || 14;
+    const end = clientEndDate || window.SupabaseClient.getLatestDataDate();
+    const start = clientStartDate || window.SupabaseClient.getDateNDaysAgo(days);
+
+    console.log(`Loading client analytics for ${clientName}: ${start} to ${end}`);
+    const analytics = await window.SupabaseClient.fetchClientAnalytics(clientName, start, end);
 
     if (!analytics) return;
 
@@ -925,38 +939,41 @@ function updateClientDailyTrendsCharts(byDate) {
     if (!byDate) return;
 
     const sortedDates = Object.keys(byDate).sort();
-    const labels = sortedDates.map(d => d.slice(5)); // MM-DD format
-    const sends = sortedDates.map(d => byDate[d].sent || 0);
-    const replies = sortedDates.map(d => byDate[d].replied || 0);
-    const positiveRates = sortedDates.map(d => {
-        const s = byDate[d];
-        return s.sent > 0 ? (s.interested / s.sent) * 100 : 0;
-    });
 
-    // Daily Sends & Replies Chart
-    const sendsCtx = document.getElementById('clientDailySendsChart');
-    if (sendsCtx) {
-        clientDailySendsChart = destroyChart(clientDailySendsChart);
-        clientDailySendsChart = new Chart(sendsCtx, {
-            type: 'line',
+    // Convert to array format for aggregation
+    const dailyData = sortedDates.map(d => ({
+        date: d,
+        sent: byDate[d].sent || 0,
+        replied: byDate[d].replied || 0,
+        interested: byDate[d].interested || 0
+    }));
+
+    // Aggregate into 3-day buckets
+    const bucketDays = sortedDates.length >= 21 ? 7 : 3;
+    const aggregated = aggregateByPeriod(dailyData, bucketDays);
+
+    const labels = aggregated.map(a => a.label);
+    const replyRates = aggregated.map(a => a.reply_rate);
+    const positiveRates = aggregated.map(a => a.positive_rate);
+
+    // Aggregated Rates Chart (Reply Rate & +ve Rate)
+    const rateCtx = document.getElementById('clientDailyPositiveRateChart');
+    if (rateCtx) {
+        clientDailyPositiveRateChart = destroyChart(clientDailyPositiveRateChart);
+        clientDailyPositiveRateChart = new Chart(rateCtx, {
+            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Sends',
-                        data: sends,
-                        borderColor: '#3b82f6',
-                        backgroundColor: '#3b82f620',
-                        fill: true,
-                        tension: 0.3
+                        label: 'Reply Rate %',
+                        data: replyRates,
+                        backgroundColor: '#3b82f6'
                     },
                     {
-                        label: 'Replies',
-                        data: replies,
-                        borderColor: '#10b981',
-                        backgroundColor: '#10b98120',
-                        fill: true,
-                        tension: 0.3
+                        label: '+ve Rate %',
+                        data: positiveRates,
+                        backgroundColor: '#10b981'
                     }
                 ]
             },
@@ -964,32 +981,6 @@ function updateClientDailyTrendsCharts(byDate) {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: { legend: { position: 'top' } },
-                scales: { y: { beginAtZero: true } }
-            }
-        });
-    }
-
-    // Daily Positive Rate Chart
-    const rateCtx = document.getElementById('clientDailyPositiveRateChart');
-    if (rateCtx) {
-        clientDailyPositiveRateChart = destroyChart(clientDailyPositiveRateChart);
-        clientDailyPositiveRateChart = new Chart(rateCtx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: '+ve Rate %',
-                    data: positiveRates,
-                    borderColor: '#8b5cf6',
-                    backgroundColor: '#8b5cf620',
-                    fill: true,
-                    tension: 0.3
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
                 scales: {
                     y: {
                         beginAtZero: true,
@@ -1373,7 +1364,6 @@ async function loadData(period, refresh = false) {
             updateOverview(data.totals, data.meta);
             updateInfraTable(data.by_infra || {});
             updateClientInfraBreakdownTable(data.by_client || {});
-            updateTldTables(data.by_tld || {}, data.by_infra_tld || {});
             updateMeta(data.meta || { start_date: '-', end_date: '-', days: 0, generated_at: new Date().toISOString() });
 
             // Update infra charts
@@ -1381,6 +1371,7 @@ async function loadData(period, refresh = false) {
 
             // Update daily trends charts (async, non-blocking)
             updateDailyTrendsCharts();
+            updateInfraComparisonTrendChart();
 
             // Populate client selector
             populateClientSelector(data.by_client || {});
@@ -1426,7 +1417,6 @@ async function loadDataWithDateRange(start, end) {
             updateOverview(data.totals, data.meta);
             updateInfraTable(data.by_infra || {});
             updateClientInfraBreakdownTable(data.by_client || {});
-            updateTldTables(data.by_tld || {}, data.by_infra_tld || {});
             updateMeta(data.meta);
 
             // Update infra charts
@@ -1434,6 +1424,7 @@ async function loadDataWithDateRange(start, end) {
 
             // Update daily trends charts
             updateDailyTrendsCharts();
+            updateInfraComparisonTrendChart();
 
             // Populate client selector
             populateClientSelector(data.by_client || {});
@@ -1599,16 +1590,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         clientFilter.addEventListener('change', () => {
             if (currentData) {
                 updateClientInfraBreakdownTable(currentData.by_client || {}, clientFilter.value);
-            }
-        });
-    }
-
-    // Infra TLD filter
-    const infraTldFilter = document.getElementById('infraTldFilter');
-    if (infraTldFilter) {
-        infraTldFilter.addEventListener('change', () => {
-            if (currentData) {
-                updateInfraTldTable(currentData.by_infra_tld || {}, infraTldFilter.value);
             }
         });
     }

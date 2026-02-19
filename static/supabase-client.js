@@ -1058,13 +1058,23 @@ async function fetchInfraTrends(days = 14) {
  * Fetch client-specific analytics with daily trends and infra breakdown
  * Used for Client Analytics tab
  * @param {string} clientName - The workspace name to fetch
+ * @param {string} startDate - Optional start date (YYYY-MM-DD)
+ * @param {string} endDate - Optional end date (YYYY-MM-DD)
  * @returns {Promise<Object>} - { byDate, byInfra, totals }
  */
-async function fetchClientAnalytics(clientName) {
+async function fetchClientAnalytics(clientName, startDate = null, endDate = null) {
+    // Default to last 14 days if no dates provided
+    const end = endDate || getLatestDataDate();
+    const start = startDate || getDateNDaysAgo(14);
+
+    console.log(`fetchClientAnalytics: ${clientName} from ${start} to ${end}`);
+
     const { data, error } = await supabaseClient
         .from('daily_infra_stats')
         .select('*')
         .eq('workspace_name', clientName)
+        .gte('date', start)
+        .lte('date', end)
         .order('date', { ascending: true });
 
     if (error) {

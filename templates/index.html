@@ -33,6 +33,7 @@
         <!-- Date Picker (only for Infra and Clients tabs) -->
         <div id="datePicker" class="period-selector" style="display: none;">
             <div class="quick-select">
+                <button class="period-btn" data-period="1d">1D</button>
                 <button class="period-btn" data-period="3d">3D</button>
                 <button class="period-btn" data-period="7d">7D</button>
                 <button class="period-btn active" data-period="14d">14D</button>
@@ -59,7 +60,6 @@
                 <button class="subtab-btn active" data-subtab="infra-overview">Overview</button>
                 <button class="subtab-btn" data-subtab="infra-comparison">Comparison</button>
                 <button class="subtab-btn" data-subtab="infra-clients">By Client</button>
-                <button class="subtab-btn" data-subtab="infra-tld">TLD Analysis</button>
                 <button class="subtab-btn" data-subtab="infra-warmup">Warmup</button>
                 <button class="subtab-btn" data-subtab="infra-cost">Cost Projections</button>
             </div>
@@ -129,18 +129,12 @@
                     </div>
                 </div>
 
-                <!-- Agency Daily Trends -->
+                <!-- Aggregated Performance Trends -->
                 <div class="charts-section">
-                    <h3>Daily Trends</h3>
-                    <div class="charts-grid">
-                        <div class="chart-container">
-                            <h4>Daily Sends & Replies</h4>
-                            <canvas id="dailySendsChart"></canvas>
-                        </div>
-                        <div class="chart-container">
-                            <h4>Daily Positive Rate</h4>
-                            <canvas id="dailyPositiveRateChart"></canvas>
-                        </div>
+                    <h3>Performance Trends (3-Day Averages)</h3>
+                    <div class="chart-container" style="max-width: 700px;">
+                        <h4>Reply Rate & Positive Rate</h4>
+                        <canvas id="dailyPositiveRateChart"></canvas>
                     </div>
                 </div>
             </div>
@@ -172,6 +166,14 @@
                         </tbody>
                     </table>
                 </div>
+
+                <!-- Performance Trends by Infra Type -->
+                <div class="charts-section">
+                    <h3>Performance Trends by Infrastructure</h3>
+                    <div class="chart-container" style="height: 350px;">
+                        <canvas id="infraComparisonTrendChart"></canvas>
+                    </div>
+                </div>
             </div>
 
             <!-- SUBTAB: Infra by Client (moved from Clients tab) -->
@@ -201,58 +203,6 @@
                             </tr>
                         </thead>
                         <tbody id="clientInfraBreakdownTableBody">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- SUBTAB: TLD Analysis -->
-            <div id="subtab-infra-tld" class="subtab-content" style="display: none;">
-                <h2>TLD Performance Analysis</h2>
-
-                <h3>Overall TLD Performance</h3>
-                <div class="table-wrapper">
-                    <table id="tldTable">
-                        <thead>
-                            <tr>
-                                <th>TLD</th>
-                                <th>Mailboxes</th>
-                                <th>Domains</th>
-                                <th>Sends</th>
-                                <th>Replies</th>
-                                <th>Interested</th>
-                                <th>Reply %</th>
-                                <th>+ve %</th>
-                                <th>+ve Reply %</th>
-                                <th>Bounce %</th>
-                            </tr>
-                        </thead>
-                        <tbody id="tldTableBody">
-                        </tbody>
-                    </table>
-                </div>
-
-                <h3>TLD by Infra Type</h3>
-                <div class="filter-row">
-                    <label for="infraTldFilter">Filter by Infra:</label>
-                    <select id="infraTldFilter">
-                        <option value="all">All Infra Types</option>
-                    </select>
-                </div>
-                <div class="table-wrapper">
-                    <table id="infraTldTable">
-                        <thead>
-                            <tr>
-                                <th>Infra Type</th>
-                                <th>TLD</th>
-                                <th>Mailboxes</th>
-                                <th>Sends</th>
-                                <th>Reply %</th>
-                                <th>+ve %</th>
-                                <th>Bounce %</th>
-                            </tr>
-                        </thead>
-                        <tbody id="infraTldTableBody">
                         </tbody>
                     </table>
                 </div>
@@ -321,6 +271,7 @@
             <!-- Client Date Picker (independent from Infra) -->
             <div id="clientDatePicker" class="period-selector">
                 <div class="quick-select">
+                    <button class="client-period-btn" data-period="1d">1D</button>
                     <button class="client-period-btn" data-period="3d">3D</button>
                     <button class="client-period-btn" data-period="7d">7D</button>
                     <button class="client-period-btn active" data-period="14d">14D</button>
@@ -429,18 +380,12 @@
                         </div>
                     </div>
 
-                    <!-- Client Daily Trends -->
+                    <!-- Client Performance Trends -->
                     <div class="charts-section">
-                        <h3>Daily Trends</h3>
-                        <div class="charts-grid">
-                            <div class="chart-container">
-                                <h4>Daily Sends & Replies</h4>
-                                <canvas id="clientDailySendsChart"></canvas>
-                            </div>
-                            <div class="chart-container">
-                                <h4>Daily Positive Rate</h4>
-                                <canvas id="clientDailyPositiveRateChart"></canvas>
-                            </div>
+                        <h3>Performance Trends (3-Day Averages)</h3>
+                        <div class="chart-container" style="max-width: 700px;">
+                            <h4>Reply Rate & Positive Rate</h4>
+                            <canvas id="clientDailyPositiveRateChart"></canvas>
                         </div>
                     </div>
 
