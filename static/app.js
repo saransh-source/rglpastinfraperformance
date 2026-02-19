@@ -1,4 +1,18 @@
 // RGL Infra Performance Dashboard - JavaScript
+// Version: 2026-02-19-v2 (Main tab restructure)
+
+console.log('[APP VERSION] 2026-02-19-v2 - Main tab restructure');
+
+// Debug: Check what tab elements exist
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('[DOM DEBUG] Checking for tab elements...');
+    console.log('[DOM DEBUG] mainTabNav:', document.getElementById('mainTabNav'));
+    console.log('[DOM DEBUG] tabNav (old):', document.getElementById('tabNav'));
+    console.log('[DOM DEBUG] main-tab-infra:', document.getElementById('main-tab-infra'));
+    console.log('[DOM DEBUG] All elements with main-tab-content class:', document.querySelectorAll('.main-tab-content').length);
+    console.log('[DOM DEBUG] All elements with tab-content class:', document.querySelectorAll('.tab-content').length);
+    console.log('[DOM DEBUG] Document body first 500 chars:', document.body.innerHTML.substring(0, 500));
+});
 
 let currentPeriod = '14d';
 let sendsChart = null;
