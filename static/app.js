@@ -1,7 +1,7 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v7 (Fixed trend charts: 6-week fixed range, line charts, separate reply/positive)
+// Version: 2026-02-19-v8 (Cost projections: always use last 7-day positive rate, detailed breakdown)
 
-console.log('[APP VERSION] 2026-02-19-v7 - Fixed trend charts: 6-week fixed range, line charts, separate reply/positive');
+console.log('[APP VERSION] 2026-02-19-v8 - Cost projections: always use last 7-day positive rate, detailed breakdown');
 
 let currentPeriod = '14d';
 let currentData = null;
@@ -438,7 +438,8 @@ function updateProjectionsTable(projections) {
     }
 }
 
-function calculateProjections(byInfra) {
+// Calculate cost projections using last 7-day positive rates
+function calculateProjections(byInfra, last7DayRates = {}) {
     const TARGET_SENDS = 100000;
     const COSTS = {
         'Maldoso': { monthly_per_mailbox: 1.67, sends_per_day: 15, mailboxes_per_domain: 4, domain_cost: 4.00, setup_per_mailbox: 0 },
@@ -465,8 +466,14 @@ function calculateProjections(byInfra) {
             setupCost = (domainsNeeded * config.domain_cost) + (mailboxesNeeded * (config.setup_per_mailbox || 0));
         }
 
-        const infraData = byInfra ? byInfra[infraType] : null;
-        const positiveRate = infraData ? (infraData.positive_rate || 0) : 0;
+        // Use last 7-day positive rate (prioritize over snapshot data)
+        let positiveRate = last7DayRates[infraType] || 0;
+
+        // Fallback to snapshot data if 7-day rate not available
+        if (positiveRate === 0 && byInfra && byInfra[infraType]) {
+            positiveRate = byInfra[infraType].positive_rate || 0;
+        }
+
         const expectedPositivesPerMonth = (TARGET_SENDS * (positiveRate / 100)) * 30;
         const costPerPositive = expectedPositivesPerMonth > 0 ? monthlyCost / expectedPositivesPerMonth : 0;
 
@@ -1305,9 +1312,40 @@ function updateWarmupTableFromSnapshot() {
     updateWarmupTable(latestInfraSnapshot.by_infra);
 }
 
-function updateProjectionsFromSnapshot() {
+// Fetch last 7 days positive rates for cost projections
+async function fetchLast7DaysPositiveRates() {
+    if (!window.SupabaseClient) return {};
+
+    try {
+        const trends = await window.SupabaseClient.fetchInfraTrends(7);
+        if (!trends || Object.keys(trends).length === 0) return {};
+
+        // Calculate 7-day aggregated positive rate per infra type
+        const rates = {};
+        for (const [infraType, dateData] of Object.entries(trends)) {
+            let totalSent = 0;
+            let totalInterested = 0;
+            for (const stats of Object.values(dateData)) {
+                totalSent += stats.sent || 0;
+                totalInterested += stats.interested || 0;
+            }
+            rates[infraType] = totalSent > 0 ? (totalInterested / totalSent) * 100 : 0;
+        }
+        return rates;
+    } catch (error) {
+        console.error('Error fetching 7-day positive rates:', error);
+        return {};
+    }
+}
+
+async function updateProjectionsFromSnapshot() {
     if (!latestInfraSnapshot || !latestInfraSnapshot.by_infra) return;
-    const projections = calculateProjections(latestInfraSnapshot.by_infra);
+
+    // Always fetch last 7 days positive rates for cost projections
+    const last7DayRates = await fetchLast7DaysPositiveRates();
+    console.log('Last 7-day positive rates:', last7DayRates);
+
+    const projections = calculateProjections(latestInfraSnapshot.by_infra, last7DayRates);
     updateProjectionsTable(projections);
 }
 

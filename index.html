@@ -21,7 +21,7 @@
             <p>Loading data...</p>
         </div>
 
-        <!-- HTML VERSION: 2026-02-19-v4 - Fixed trend charts with separate line charts -->
+        <!-- HTML VERSION: 2026-02-19-v5 - Cost projections with detailed breakdown -->
         <!-- Main Tab Navigation -->
         <div id="mainTabNav" class="main-tab-nav" style="display: none;">
             <button class="main-tab-btn active" data-main-tab="infra">Infra</button>
@@ -257,15 +257,60 @@
                 </div>
 
                 <div class="projections-notes">
-                    <h3>Cost Breakdown</h3>
-                    <ul>
-                        <li><strong>Maldoso:</strong> $1.67/mailbox/month, 15 sends/day, 4 mailboxes/domain, $4 domain cost</li>
-                        <li><strong>Google Reseller:</strong> $2.00/mailbox/month, 20 sends/day, 3 mailboxes/domain, $0.20 setup/mailbox, $4 domain cost</li>
-                        <li><strong>Aged Outlook:</strong> $4.22/month per tenant (25 mailboxes), 10 sends/day, 1 domain/tenant, $11.22 tenant cost (one-time), $7 aged domain premium (one-time)</li>
-                    </ul>
+                    <h3>Infrastructure Cost Details</h3>
+
+                    <div class="cost-detail-card">
+                        <h4>Maldoso (MD SMTP)</h4>
+                        <table class="cost-detail-table">
+                            <tr><td>Monthly Cost per Mailbox</td><td>$1.67</td></tr>
+                            <tr><td>Sends per Mailbox per Day</td><td>15</td></tr>
+                            <tr><td>Mailboxes per Domain</td><td>4</td></tr>
+                            <tr><td>Domain Cost (one-time)</td><td>$4.00</td></tr>
+                        </table>
+                        <p class="calc-formula">
+                            <strong>Monthly Cost</strong> = Mailboxes Needed × $1.67<br>
+                            <strong>One-Time Setup</strong> = Domains Needed × $4.00
+                        </p>
+                    </div>
+
+                    <div class="cost-detail-card">
+                        <h4>Google Reseller (GR)</h4>
+                        <table class="cost-detail-table">
+                            <tr><td>Monthly Cost per Mailbox</td><td>$2.00</td></tr>
+                            <tr><td>Sends per Mailbox per Day</td><td>20</td></tr>
+                            <tr><td>Mailboxes per Domain</td><td>3</td></tr>
+                            <tr><td>Setup Cost per Mailbox (one-time)</td><td>$0.20</td></tr>
+                            <tr><td>Domain Cost (one-time)</td><td>$4.00</td></tr>
+                        </table>
+                        <p class="calc-formula">
+                            <strong>Monthly Cost</strong> = Mailboxes Needed × $2.00<br>
+                            <strong>One-Time Setup</strong> = (Domains × $4.00) + (Mailboxes × $0.20)
+                        </p>
+                    </div>
+
+                    <div class="cost-detail-card">
+                        <h4>Aged Outlook (AO)</h4>
+                        <table class="cost-detail-table">
+                            <tr><td>Monthly Cost per Tenant</td><td>$4.22</td></tr>
+                            <tr><td>Mailboxes per Tenant</td><td>25</td></tr>
+                            <tr><td>Sends per Mailbox per Day</td><td>10</td></tr>
+                            <tr><td>Domains per Tenant</td><td>1</td></tr>
+                            <tr><td>Tenant Setup Cost (one-time)</td><td>$11.22</td></tr>
+                            <tr><td>Aged Domain Premium (one-time)</td><td>$7.00</td></tr>
+                        </table>
+                        <p class="calc-formula">
+                            <strong>Monthly Cost</strong> = Tenants Needed × $4.22<br>
+                            <strong>One-Time Setup</strong> = Tenants × ($11.22 + $7.00)
+                        </p>
+                    </div>
+
                     <h3>How Cost per Positive is Calculated</h3>
-                    <p>Cost per Positive = Monthly Cost ÷ Expected Positives per Month (excludes one-time setup costs)</p>
-                    <p>Expected Positives = (100K sends/day × current +ve rate) × 30 days</p>
+                    <div class="formula-box">
+                        <p><strong>+ve Rate</strong> = Last 7 days positive rate (always uses most recent week)</p>
+                        <p><strong>Expected Positives/Month</strong> = 100,000 sends/day × (+ve Rate ÷ 100) × 30 days</p>
+                        <p><strong>Cost per Positive</strong> = Monthly Cost ÷ Expected Positives per Month</p>
+                        <p class="note">Note: One-time setup costs are excluded from cost per positive calculation.</p>
+                    </div>
                 </div>
             </div>
         </div>

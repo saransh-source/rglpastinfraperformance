@@ -571,16 +571,22 @@ tr:hover {
 /* Projections Notes */
 .projections-notes {
     margin-top: 2rem;
-    padding: 1.25rem;
+    padding: 1.5rem;
     background: var(--bg-secondary);
     border-radius: 8px;
     border: 1px solid var(--border-color);
 }
 
 .projections-notes h3 {
-    font-size: 1rem;
-    margin: 0 0 0.75rem 0;
+    font-size: 1.1rem;
+    margin: 1.5rem 0 1rem 0;
     color: var(--text-primary);
+    border-bottom: 1px solid var(--border-color);
+    padding-bottom: 0.5rem;
+}
+
+.projections-notes h3:first-child {
+    margin-top: 0;
 }
 
 .projections-notes ul {
@@ -596,6 +602,97 @@ tr:hover {
 
 .projections-notes strong {
     color: var(--text-primary);
+}
+
+/* Cost Detail Cards */
+.cost-detail-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+
+.cost-detail-card h4 {
+    font-size: 0.95rem;
+    margin: 0 0 0.75rem 0;
+    color: var(--accent-primary);
+    font-weight: 600;
+}
+
+.cost-detail-table {
+    width: 100%;
+    font-size: 0.85rem;
+    border-collapse: collapse;
+    margin-bottom: 0.75rem;
+}
+
+.cost-detail-table td {
+    padding: 0.35rem 0.5rem;
+    border-bottom: 1px solid var(--border-color);
+}
+
+.cost-detail-table td:first-child {
+    color: var(--text-secondary);
+    width: 60%;
+}
+
+.cost-detail-table td:last-child {
+    color: var(--text-primary);
+    font-weight: 500;
+    text-align: right;
+}
+
+.cost-detail-table tr:last-child td {
+    border-bottom: none;
+}
+
+.calc-formula {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0;
+    padding: 0.75rem;
+    background: var(--bg-secondary);
+    border-radius: 4px;
+    line-height: 1.6;
+}
+
+.calc-formula strong {
+    color: var(--accent-green);
+}
+
+/* Formula Box */
+.formula-box {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.formula-box p {
+    margin: 0.5rem 0;
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+}
+
+.formula-box p:first-child {
+    margin-top: 0;
+}
+
+.formula-box p:last-child {
+    margin-bottom: 0;
+}
+
+.formula-box strong {
+    color: var(--text-primary);
+}
+
+.formula-box .note {
+    margin-top: 1rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+    font-style: italic;
+    color: var(--accent-yellow);
 }
 
 /* Error State */
