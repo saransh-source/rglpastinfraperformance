@@ -70,214 +70,275 @@
             <p>Loading data...</p>
         </div>
 
-        <!-- Tab Navigation -->
-        <div id="tabNav" class="tab-nav" style="display: none;">
-            <button class="tab-btn active" data-tab="overview">Overview</button>
-            <button class="tab-btn" data-tab="infra">Infra Comparison</button>
-            <button class="tab-btn" data-tab="client-analytics">Client Analytics</button>
-            <button class="tab-btn" data-tab="tld">TLD Analysis</button>
-            <button class="tab-btn" data-tab="warmup">Warmup Status</button>
-            <button class="tab-btn" data-tab="clients">Clients</button>
-            <button class="tab-btn" data-tab="bounces">Bounces</button>
-            <button class="tab-btn" data-tab="domains">Domain Health</button>
-            <button class="tab-btn" data-tab="projections">Cost Projections</button>
+        <!-- Main Tab Navigation -->
+        <div id="mainTabNav" class="main-tab-nav" style="display: none;">
+            <button class="main-tab-btn active" data-main-tab="infra">Infra</button>
+            <button class="main-tab-btn" data-main-tab="clients">Clients</button>
+            <button class="main-tab-btn" data-main-tab="bounces">Bounces</button>
+            <button class="main-tab-btn" data-main-tab="domains">Domains</button>
         </div>
 
-        <!-- TAB: Overview -->
-        <div id="tab-overview" class="tab-content" style="display: none;">
-            <div class="overview-cards">
-                <div class="card">
-                    <div class="card-label">Total Sends</div>
-                    <div class="card-value" id="totalSends">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Total Replies</div>
-                    <div class="card-value" id="totalReplies">-</div>
-                </div>
-                <div class="card highlight">
-                    <div class="card-label">Positive Replies</div>
-                    <div class="card-value" id="totalPositive">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Reply Rate</div>
-                    <div class="card-value" id="replyRate">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">+ve Rate (Overall)</div>
-                    <div class="card-value" id="positiveRate">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">+ve Rate (of Replies)</div>
-                    <div class="card-value" id="positiveReplyRate">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Mailboxes</div>
-                    <div class="card-value" id="mailboxCount">-</div>
-                </div>
-            </div>
-            
-            <div class="capacity-cards">
-                <div class="card-wide">
-                    <div class="card-label">Current Daily Capacity</div>
-                    <div class="card-value" id="currentCapacity">-</div>
-                    <div class="card-sublabel">Based on current daily limits</div>
-                </div>
-                <div class="card-wide">
-                    <div class="card-label">Theoretical Max Capacity</div>
-                    <div class="card-value" id="theoreticalMax">-</div>
-                    <div class="card-sublabel">If all mailboxes at max limit</div>
-                </div>
-                <div class="card-wide">
-                    <div class="card-label">Positives/Day</div>
-                    <div class="card-value" id="positivesPerDay">-</div>
-                </div>
+        <!-- ========================================== -->
+        <!-- MAIN TAB: INFRA -->
+        <!-- ========================================== -->
+        <div id="main-tab-infra" class="main-tab-content" style="display: none;">
+            <!-- Infra Subtabs -->
+            <div class="subtab-nav">
+                <button class="subtab-btn active" data-subtab="infra-overview">Overview</button>
+                <button class="subtab-btn" data-subtab="infra-comparison">Comparison</button>
+                <button class="subtab-btn" data-subtab="infra-tld">TLD Analysis</button>
+                <button class="subtab-btn" data-subtab="infra-warmup">Warmup</button>
+                <button class="subtab-btn" data-subtab="infra-cost">Cost Projections</button>
             </div>
 
-            <!-- Agency-Wide Trend Charts -->
-            <div class="trends-section">
-                <h3>Agency-Wide Performance Trends (Last 14 Days)</h3>
+            <!-- SUBTAB: Infra Overview -->
+            <div id="subtab-infra-overview" class="subtab-content">
+                <div class="overview-cards">
+                    <div class="card">
+                        <div class="card-label">Total Sends</div>
+                        <div class="card-value" id="totalSends">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Total Replies</div>
+                        <div class="card-value" id="totalReplies">-</div>
+                    </div>
+                    <div class="card highlight">
+                        <div class="card-label">Positive Replies</div>
+                        <div class="card-value" id="totalPositive">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Reply Rate</div>
+                        <div class="card-value" id="replyRate">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">+ve Rate (Overall)</div>
+                        <div class="card-value" id="positiveRate">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">+ve Rate (of Replies)</div>
+                        <div class="card-value" id="positiveReplyRate">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Mailboxes</div>
+                        <div class="card-value" id="mailboxCount">-</div>
+                    </div>
+                </div>
+
+                <div class="capacity-cards">
+                    <div class="card-wide">
+                        <div class="card-label">Current Daily Capacity</div>
+                        <div class="card-value" id="currentCapacity">-</div>
+                        <div class="card-sublabel">Based on current daily limits</div>
+                    </div>
+                    <div class="card-wide">
+                        <div class="card-label">Theoretical Max Capacity</div>
+                        <div class="card-value" id="theoreticalMax">-</div>
+                        <div class="card-sublabel">If all mailboxes at max limit</div>
+                    </div>
+                    <div class="card-wide">
+                        <div class="card-label">Positives/Day</div>
+                        <div class="card-value" id="positivesPerDay">-</div>
+                    </div>
+                </div>
+
+                <!-- Agency-Wide Trend Charts -->
+                <div class="trends-section">
+                    <h3>Agency-Wide Performance Trends (Last 14 Days)</h3>
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h4>Reply Rate Trend</h4>
+                            <canvas id="replyRateTrendChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h4>Positive Rate Trend</h4>
+                            <canvas id="positiveRateTrendChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Charts Section -->
                 <div class="charts-section">
                     <div class="chart-container">
-                        <h4>Reply Rate Trend</h4>
-                        <canvas id="replyRateTrendChart"></canvas>
+                        <h3>Sends by Infra Type</h3>
+                        <canvas id="sendsChart"></canvas>
                     </div>
                     <div class="chart-container">
-                        <h4>Positive Rate Trend</h4>
-                        <canvas id="positiveRateTrendChart"></canvas>
+                        <h3>Positive Rate by Infra Type</h3>
+                        <canvas id="rateChart"></canvas>
                     </div>
                 </div>
             </div>
 
-            <!-- Charts Section -->
-            <div class="charts-section">
-                <div class="chart-container">
-                    <h3>Sends by Infra Type</h3>
-                    <canvas id="sendsChart"></canvas>
-                </div>
-                <div class="chart-container">
-                    <h3>Positive Rate by Infra Type</h3>
-                    <canvas id="rateChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB: Infra Comparison -->
-        <div id="tab-infra" class="tab-content" style="display: none;">
-            <h2>Infrastructure Performance Comparison</h2>
-            <div class="table-wrapper">
-                <table id="infraTable">
-                    <thead>
-                        <tr>
-                            <th>Infra Type</th>
-                            <th>Mailboxes</th>
-                            <th>Domains</th>
-                            <th>Current Cap</th>
-                            <th>Theo Max</th>
-                            <th>Sends</th>
-                            <th>Replies</th>
-                            <th>Interested</th>
-                            <th>Reply %</th>
-                            <th>+ve %</th>
-                            <th>+ve Reply %</th>
-                            <th>Bounce %</th>
-                            <th>Avg/MB/Day</th>
-                            <th>+ve/Day</th>
-                        </tr>
-                    </thead>
-                    <tbody id="infraTableBody">
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Infra Trend Chart -->
-            <div class="infra-trends-section">
-                <h3>Infra Type Performance Trends (Last 14 Days)</h3>
-                <div class="chart-container chart-wide">
-                    <h4>Positive Rate by Infra Type Over Time</h4>
-                    <canvas id="infraTrendChart"></canvas>
-                </div>
-            </div>
-        </div>
-
-        <!-- TAB: Client Analytics -->
-        <div id="tab-client-analytics" class="tab-content" style="display: none;">
-            <h2>Client Analytics</h2>
-            <div class="filter-row">
-                <label for="clientAnalyticsSelect">Select Client:</label>
-                <select id="clientAnalyticsSelect">
-                    <option value="">Select a client...</option>
-                </select>
-            </div>
-
-            <!-- Placeholder when no client selected -->
-            <div id="clientAnalyticsPlaceholder" class="placeholder-message">
-                <p>Select a client above to view their detailed analytics</p>
-            </div>
-
-            <!-- Client Summary Cards -->
-            <div id="clientSummaryCards" class="overview-cards" style="display: none;">
-                <div class="card">
-                    <div class="card-label">Total Sends</div>
-                    <div class="card-value" id="clientTotalSends">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Total Replies</div>
-                    <div class="card-value" id="clientTotalReplies">-</div>
-                </div>
-                <div class="card highlight">
-                    <div class="card-label">Positive Replies</div>
-                    <div class="card-value" id="clientTotalPositive">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Reply Rate</div>
-                    <div class="card-value" id="clientReplyRate">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">+ve Rate</div>
-                    <div class="card-value" id="clientPositiveRate">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">Mailboxes</div>
-                    <div class="card-value" id="clientMailboxCount">-</div>
-                </div>
-                <div class="card">
-                    <div class="card-label">+ve/Day</div>
-                    <div class="card-value" id="clientPositivesPerDay">-</div>
-                </div>
-            </div>
-
-            <!-- Client Trend Charts -->
-            <div id="clientChartsContainer" style="display: none;">
-                <h3>Performance Trends</h3>
-                <div class="charts-section">
-                    <div class="chart-container">
-                        <h4>Send Volume (Daily)</h4>
-                        <canvas id="clientSendsChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <h4>Positive Rate Trend</h4>
-                        <canvas id="clientPositiveRateChart"></canvas>
-                    </div>
-                </div>
-                <div class="charts-section">
-                    <div class="chart-container">
-                        <h4>Reply Rate Trend</h4>
-                        <canvas id="clientReplyRateChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <h4>Performance by Infra Type</h4>
-                        <canvas id="clientInfraBreakdownChart"></canvas>
-                    </div>
-                </div>
-            </div>
-
-            <!-- Client Infra Table -->
-            <div id="clientInfraTableContainer" style="display: none;">
-                <h3>Infrastructure Breakdown</h3>
+            <!-- SUBTAB: Infra Comparison -->
+            <div id="subtab-infra-comparison" class="subtab-content" style="display: none;">
+                <h2>Infrastructure Performance Comparison</h2>
                 <div class="table-wrapper">
-                    <table id="clientInfraTable">
+                    <table id="infraTable">
                         <thead>
                             <tr>
+                                <th>Infra Type</th>
+                                <th>Mailboxes</th>
+                                <th>Domains</th>
+                                <th>Current Cap</th>
+                                <th>Theo Max</th>
+                                <th>Sends</th>
+                                <th>Replies</th>
+                                <th>Interested</th>
+                                <th>Reply %</th>
+                                <th>+ve %</th>
+                                <th>+ve Reply %</th>
+                                <th>Bounce %</th>
+                                <th>Avg/MB/Day</th>
+                                <th>+ve/Day</th>
+                            </tr>
+                        </thead>
+                        <tbody id="infraTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Infra Trend Chart -->
+                <div class="infra-trends-section">
+                    <h3>Infra Type Performance Trends (Last 14 Days)</h3>
+                    <div class="chart-container chart-wide">
+                        <h4>Positive Rate by Infra Type Over Time</h4>
+                        <canvas id="infraTrendChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SUBTAB: TLD Analysis -->
+            <div id="subtab-infra-tld" class="subtab-content" style="display: none;">
+                <h2>TLD Performance Analysis</h2>
+
+                <h3>Overall TLD Performance</h3>
+                <div class="table-wrapper">
+                    <table id="tldTable">
+                        <thead>
+                            <tr>
+                                <th>TLD</th>
+                                <th>Mailboxes</th>
+                                <th>Domains</th>
+                                <th>Sends</th>
+                                <th>Replies</th>
+                                <th>Interested</th>
+                                <th>Reply %</th>
+                                <th>+ve %</th>
+                                <th>+ve Reply %</th>
+                                <th>Bounce %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tldTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <h3>TLD by Infra Type</h3>
+                <div class="filter-row">
+                    <label for="infraTldFilter">Filter by Infra:</label>
+                    <select id="infraTldFilter">
+                        <option value="all">All Infra Types</option>
+                    </select>
+                </div>
+                <div class="table-wrapper">
+                    <table id="infraTldTable">
+                        <thead>
+                            <tr>
+                                <th>Infra Type</th>
+                                <th>TLD</th>
+                                <th>Mailboxes</th>
+                                <th>Sends</th>
+                                <th>Reply %</th>
+                                <th>+ve %</th>
+                                <th>Bounce %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="infraTldTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SUBTAB: Warmup Status -->
+            <div id="subtab-infra-warmup" class="subtab-content" style="display: none;">
+                <h2>Warmup Status by Infra Type</h2>
+                <div class="table-wrapper">
+                    <table id="warmupTable">
+                        <thead>
+                            <tr>
+                                <th>Infra Type</th>
+                                <th>Total Mailboxes</th>
+                                <th>In Warmup</th>
+                            </tr>
+                        </thead>
+                        <tbody id="warmupTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- SUBTAB: Cost Projections -->
+            <div id="subtab-infra-cost" class="subtab-content" style="display: none;">
+                <h2>Cost Projections for 100K Sends/Day</h2>
+                <p class="section-desc">Estimated costs to reach 100,000 email sends per day capacity (Maldoso, Google Reseller, Aged Outlook only)</p>
+                <div class="table-wrapper">
+                    <table id="projectionsTable">
+                        <thead>
+                            <tr>
+                                <th>Infra Type</th>
+                                <th>Sends/MB/Day</th>
+                                <th>Mailboxes Needed</th>
+                                <th>Domains Needed</th>
+                                <th>Monthly Cost</th>
+                                <th>One-Time Setup</th>
+                                <th>+ve Rate</th>
+                                <th>Expected +ve/Month</th>
+                                <th>Cost per Positive</th>
+                            </tr>
+                        </thead>
+                        <tbody id="projectionsTableBody">
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="projections-notes">
+                    <h3>Cost Breakdown</h3>
+                    <ul>
+                        <li><strong>Maldoso:</strong> $1.67/mailbox/month, 15 sends/day, 4 mailboxes/domain, $4 domain cost</li>
+                        <li><strong>Google Reseller:</strong> $2.00/mailbox/month, 20 sends/day, 3 mailboxes/domain, $0.20 setup/mailbox, $4 domain cost</li>
+                        <li><strong>Aged Outlook:</strong> $4.22/month per tenant (25 mailboxes), 10 sends/day, 1 domain/tenant, $11.22 tenant cost (one-time), $7 aged domain premium (one-time)</li>
+                    </ul>
+                    <h3>How Cost per Positive is Calculated</h3>
+                    <p>Cost per Positive = Monthly Cost ÷ Expected Positives per Month (excludes one-time setup costs)</p>
+                    <p>Expected Positives = (100K sends/day × current +ve rate) × 30 days</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========================================== -->
+        <!-- MAIN TAB: CLIENTS -->
+        <!-- ========================================== -->
+        <div id="main-tab-clients" class="main-tab-content" style="display: none;">
+            <!-- Clients Subtabs -->
+            <div class="subtab-nav">
+                <button class="subtab-btn active" data-subtab="clients-overview">Overview</button>
+                <button class="subtab-btn" data-subtab="clients-analytics">Analytics</button>
+            </div>
+
+            <!-- SUBTAB: Clients Overview -->
+            <div id="subtab-clients-overview" class="subtab-content">
+                <h2>Client / Infra Breakdown</h2>
+                <div class="filter-row">
+                    <label for="clientFilter">Select Client:</label>
+                    <select id="clientFilter">
+                        <option value="all">All Clients</option>
+                    </select>
+                </div>
+                <div class="table-wrapper">
+                    <table id="clientTable">
+                        <thead>
+                            <tr>
+                                <th>Client</th>
                                 <th>Infra Type</th>
                                 <th>Mailboxes</th>
                                 <th>Domains</th>
@@ -286,126 +347,130 @@
                                 <th>Interested</th>
                                 <th>Reply %</th>
                                 <th>+ve %</th>
+                                <th>+ve Reply %</th>
                                 <th>Bounce %</th>
                             </tr>
                         </thead>
-                        <tbody id="clientInfraTableBody">
+                        <tbody id="clientTableBody">
                         </tbody>
                     </table>
                 </div>
             </div>
-        </div>
 
-        <!-- TAB: TLD Analysis -->
-        <div id="tab-tld" class="tab-content" style="display: none;">
-            <h2>TLD Performance Analysis</h2>
-            
-            <h3>Overall TLD Performance</h3>
-            <div class="table-wrapper">
-                <table id="tldTable">
-                    <thead>
-                        <tr>
-                            <th>TLD</th>
-                            <th>Mailboxes</th>
-                            <th>Domains</th>
-                            <th>Sends</th>
-                            <th>Replies</th>
-                            <th>Interested</th>
-                            <th>Reply %</th>
-                            <th>+ve %</th>
-                            <th>+ve Reply %</th>
-                            <th>Bounce %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tldTableBody">
-                    </tbody>
-                </table>
-            </div>
+            <!-- SUBTAB: Client Analytics -->
+            <div id="subtab-clients-analytics" class="subtab-content" style="display: none;">
+                <h2>Client Analytics</h2>
+                <div class="filter-row">
+                    <label for="clientAnalyticsSelect">Select Client:</label>
+                    <select id="clientAnalyticsSelect">
+                        <option value="">Select a client...</option>
+                    </select>
+                </div>
 
-            <h3>TLD by Infra Type</h3>
-            <div class="filter-row">
-                <label for="infraTldFilter">Filter by Infra:</label>
-                <select id="infraTldFilter">
-                    <option value="all">All Infra Types</option>
-                </select>
-            </div>
-            <div class="table-wrapper">
-                <table id="infraTldTable">
-                    <thead>
-                        <tr>
-                            <th>Infra Type</th>
-                            <th>TLD</th>
-                            <th>Mailboxes</th>
-                            <th>Sends</th>
-                            <th>Reply %</th>
-                            <th>+ve %</th>
-                            <th>Bounce %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="infraTldTableBody">
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                <!-- Placeholder when no client selected -->
+                <div id="clientAnalyticsPlaceholder" class="placeholder-message">
+                    <p>Select a client above to view their detailed analytics</p>
+                </div>
 
-        <!-- TAB: Warmup Status -->
-        <div id="tab-warmup" class="tab-content" style="display: none;">
-            <h2>Warmup Status by Infra Type</h2>
-            <div class="table-wrapper">
-                <table id="warmupTable">
-                    <thead>
-                        <tr>
-                            <th>Infra Type</th>
-                            <th>Total Mailboxes</th>
-                            <th>In Warmup</th>
-                            <th>Not Warmup</th>
-                            <th>Avg Warmup Limit</th>
-                            <th>Current Capacity</th>
-                            <th>Theoretical Max</th>
-                            <th>Capacity %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="warmupTableBody">
-                    </tbody>
-                </table>
-            </div>
-        </div>
+                <!-- Client Summary Cards -->
+                <div id="clientSummaryCards" class="overview-cards" style="display: none;">
+                    <div class="card">
+                        <div class="card-label">Total Sends</div>
+                        <div class="card-value" id="clientTotalSends">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Total Replies</div>
+                        <div class="card-value" id="clientTotalReplies">-</div>
+                    </div>
+                    <div class="card highlight">
+                        <div class="card-label">Positive Replies</div>
+                        <div class="card-value" id="clientTotalPositive">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Reply Rate</div>
+                        <div class="card-value" id="clientReplyRate">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">+ve Rate</div>
+                        <div class="card-value" id="clientPositiveRate">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">Mailboxes</div>
+                        <div class="card-value" id="clientMailboxCount">-</div>
+                    </div>
+                    <div class="card">
+                        <div class="card-label">+ve/Day</div>
+                        <div class="card-value" id="clientPositivesPerDay">-</div>
+                    </div>
+                </div>
 
-        <!-- TAB: Clients -->
-        <div id="tab-clients" class="tab-content" style="display: none;">
-            <h2>Client / Infra Breakdown</h2>
-            <div class="filter-row">
-                <label for="clientFilter">Select Client:</label>
-                <select id="clientFilter">
-                    <option value="all">All Clients</option>
-                </select>
-            </div>
-            <div class="table-wrapper">
-                <table id="clientTable">
-                    <thead>
-                        <tr>
-                            <th>Client</th>
-                            <th>Infra Type</th>
-                            <th>Mailboxes</th>
-                            <th>Domains</th>
-                            <th>Sends</th>
-                            <th>Replies</th>
-                            <th>Interested</th>
-                            <th>Reply %</th>
-                            <th>+ve %</th>
-                            <th>+ve Reply %</th>
-                            <th>Bounce %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="clientTableBody">
-                    </tbody>
-                </table>
+                <!-- Client Trend Charts -->
+                <div id="clientChartsContainer" style="display: none;">
+                    <h3>Performance Trends</h3>
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h4>Send Volume (Daily)</h4>
+                            <canvas id="clientSendsChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h4>Positive Rate Trend</h4>
+                            <canvas id="clientPositiveRateChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="charts-section">
+                        <div class="chart-container">
+                            <h4>Reply Rate Trend</h4>
+                            <canvas id="clientReplyRateChart"></canvas>
+                        </div>
+                        <div class="chart-container">
+                            <h4>Performance by Infra Type</h4>
+                            <canvas id="clientInfraBreakdownChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Client Infra Table -->
+                <div id="clientInfraTableContainer" style="display: none;">
+                    <h3>Infrastructure Breakdown</h3>
+                    <div class="table-wrapper">
+                        <table id="clientInfraTable">
+                            <thead>
+                                <tr>
+                                    <th>Infra Type</th>
+                                    <th>Mailboxes</th>
+                                    <th>Domains</th>
+                                    <th>Sends</th>
+                                    <th>Replies</th>
+                                    <th>Interested</th>
+                                    <th>Reply %</th>
+                                    <th>+ve %</th>
+                                    <th>Bounce %</th>
+                                </tr>
+                            </thead>
+                            <tbody id="clientInfraTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <!-- TAB: Bounces -->
-        <div id="tab-bounces" class="tab-content" style="display: none;">
+        <!-- ========================================== -->
+        <!-- MAIN TAB: BOUNCES -->
+        <!-- ========================================== -->
+        <div id="main-tab-bounces" class="main-tab-content" style="display: none;">
             <h2>Bounce Analysis</h2>
+
+            <!-- Independent Bounce Date Picker -->
+            <div class="bounce-date-controls">
+                <label>Date Range:</label>
+                <input type="date" id="bounceStartDate" />
+                <span>to</span>
+                <input type="date" id="bounceEndDate" />
+                <button id="applyBounceDate" class="btn-small">Apply</button>
+                <span class="bounce-date-note">Data available from Feb 18, 2026</span>
+            </div>
+
             <p class="section-desc">Data source: <span id="bounceDataSource" class="source-aggregate">loading...</span></p>
 
             <div class="bounce-overview-cards">
@@ -509,114 +574,14 @@
             </div>
         </div>
 
-        <!-- TAB: Domain Health -->
-        <div id="tab-domains" class="tab-content" style="display: none;">
-            <h2>Domain Health Analysis</h2>
-            <p class="section-desc">Identify domains that need recycling based on bounce and reply rates</p>
-
-            <div class="filter-row">
-                <label for="domainClientFilter">Filter by Client:</label>
-                <select id="domainClientFilter">
-                    <option value="all">All Clients</option>
-                </select>
-                <button class="apply-btn" id="applyDomainFilter">Apply Filter</button>
-            </div>
-
-            <h3 class="danger-heading">Highest Bounce Rate Domains (Flag for Removal)</h3>
-            <div class="table-wrapper">
-                <table id="worstBounceTable">
-                    <thead>
-                        <tr>
-                            <th>Domain</th>
-                            <th>Client</th>
-                            <th>Infra Type</th>
-                            <th>Mailboxes</th>
-                            <th>Sends</th>
-                            <th>Bounces</th>
-                            <th class="danger-col">Bounce %</th>
-                            <th>Reply %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="worstBounceTableBody">
-                    </tbody>
-                </table>
-            </div>
-
-            <h3 class="warning-heading">Lowest Reply Rate Domains</h3>
-            <div class="table-wrapper">
-                <table id="worstReplyTable">
-                    <thead>
-                        <tr>
-                            <th>Domain</th>
-                            <th>Client</th>
-                            <th>Infra Type</th>
-                            <th>Mailboxes</th>
-                            <th>Sends</th>
-                            <th>Replies</th>
-                            <th class="warning-col">Reply %</th>
-                            <th>Bounce %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="worstReplyTableBody">
-                    </tbody>
-                </table>
-            </div>
-
-            <h3 class="success-heading">Best Performing Domains</h3>
-            <div class="table-wrapper">
-                <table id="bestDomainsTable">
-                    <thead>
-                        <tr>
-                            <th>Domain</th>
-                            <th>Client</th>
-                            <th>Infra Type</th>
-                            <th>Mailboxes</th>
-                            <th>Sends</th>
-                            <th>Replies</th>
-                            <th class="success-col">Reply %</th>
-                            <th>Bounce %</th>
-                        </tr>
-                    </thead>
-                    <tbody id="bestDomainsTableBody">
-                    </tbody>
-                </table>
-            </div>
-        </div>
-
-        <!-- TAB: Cost Projections -->
-        <div id="tab-projections" class="tab-content" style="display: none;">
-            <h2>Cost Projections for 100K Sends/Day</h2>
-            <p class="section-desc">Estimated costs to reach 100,000 email sends per day capacity (Maldoso, Google Reseller, Aged Outlook only)</p>
-            <div class="table-wrapper">
-                <table id="projectionsTable">
-                    <thead>
-                        <tr>
-                            <th>Infra Type</th>
-                            <th>Sends/MB/Day</th>
-                            <th>Mailboxes Needed</th>
-                            <th>Domains Needed</th>
-                            <th>Monthly Cost</th>
-                            <th>One-Time Setup</th>
-                            <th>+ve Rate</th>
-                            <th>Expected +ve/Month</th>
-                            <th>Cost per Positive</th>
-                        </tr>
-                    </thead>
-                    <tbody id="projectionsTableBody">
-                    </tbody>
-                </table>
-            </div>
-            
-            <div class="projections-notes">
-                <h3>Cost Breakdown</h3>
-                <ul>
-                    <li><strong>Maldoso:</strong> $1.67/mailbox/month, 15 sends/day, 4 mailboxes/domain, $4 domain cost</li>
-                    <li><strong>Google Reseller:</strong> $2.00/mailbox/month, 20 sends/day, 3 mailboxes/domain, $0.20 setup/mailbox, $4 domain cost</li>
-                    <li><strong>Aged Outlook:</strong> $4.22/month per tenant (25 mailboxes), 10 sends/day, 1 domain/tenant, $11.22 tenant cost (one-time), $7 aged domain premium (one-time)</li>
-                </ul>
-                <h3>How Cost per Positive is Calculated</h3>
-                <p>Cost per Positive = Monthly Cost ÷ Expected Positives per Month (excludes one-time setup costs)</p>
-                <p>Expected Positives = (100K sends/day × current +ve rate) × 30 days</p>
+        <!-- ========================================== -->
+        <!-- MAIN TAB: DOMAINS -->
+        <!-- ========================================== -->
+        <div id="main-tab-domains" class="main-tab-content" style="display: none;">
+            <div class="placeholder-message">
+                <h2>Domain Health</h2>
+                <p>Coming Soon</p>
+                <p class="hint">Domain health analysis will be available in a future update.</p>
             </div>
         </div>
 

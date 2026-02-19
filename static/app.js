@@ -1,13 +1,19 @@
 // RGL Infra Performance Dashboard - JavaScript
 
 let currentPeriod = '14d';
-let currentTab = 'overview';
 let sendsChart = null;
 let rateChart = null;
 let currentData = null;
 let currentBounceData = null;
 let currentDomainData = null;
 let workspaceMap = {};
+
+// Main tab and subtab state
+let currentMainTab = 'infra';
+let currentSubtabs = {
+    infra: 'infra-overview',
+    clients: 'clients-overview'
+};
 
 // Trend charts (agency-wide)
 let replyRateTrendChart = null;
@@ -25,9 +31,14 @@ let clientInfraBreakdownChart = null;
 // Cached latest snapshot for time-independent tabs
 let latestInfraSnapshot = null;
 
-// Date range state
+// Date range state (main dashboard)
 let startDate = null;
 let endDate = null;
+
+// Bounce-specific date state (independent from main dashboard)
+let bounceStartDate = null;
+let bounceEndDate = null;
+const BOUNCE_DATA_START = '2026-02-18'; // First date with webhook bounce data
 
 // Loading timeout and retry configuration
 const LOADING_TIMEOUT_MS = 12000; // Show "taking longer" message after 12 seconds
@@ -133,14 +144,15 @@ async function fetchData(period, refresh = false) {
     return allData[period] || allData['14d'] || {};
 }
 
-// Fetch bounce data from Supabase
+// Fetch bounce data from Supabase (uses bounce-specific dates)
 async function fetchBounceData() {
     if (!window.SupabaseClient) return null;
 
-    const days = PERIOD_DAYS[currentPeriod] || 14;
-    // Use latest data date as end (based on collection time at 4:30 PM IST)
-    const end = endDate || window.SupabaseClient.getLatestDataDate();
-    const start = startDate || window.SupabaseClient.getDateNDaysAgo(days);
+    // Use bounce-specific dates (independent from main dashboard)
+    const end = bounceEndDate || window.SupabaseClient.getLatestDataDate();
+    const start = bounceStartDate || BOUNCE_DATA_START;
+
+    console.log(`Fetching bounces from ${start} to ${end}`);
 
     try {
         return await window.SupabaseClient.fetchBounces(start, end);
@@ -220,18 +232,57 @@ function calculateProjectionsClientSide(byInfra) {
 }
 
 // Tab switching
-function switchTab(tabId) {
-    currentTab = tabId;
-    
-    // Update tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.classList.toggle('active', btn.dataset.tab === tabId);
+// Switch main tab (Infra, Clients, Bounces, Domains)
+function switchMainTab(mainTabId) {
+    currentMainTab = mainTabId;
+
+    // Update main tab buttons
+    document.querySelectorAll('.main-tab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.mainTab === mainTabId);
     });
-    
-    // Update tab content
-    document.querySelectorAll('.tab-content').forEach(content => {
-        content.style.display = content.id === `tab-${tabId}` ? 'block' : 'none';
+
+    // Show/hide main tab content
+    document.querySelectorAll('.main-tab-content').forEach(content => {
+        content.style.display = content.id === `main-tab-${mainTabId}` ? 'block' : 'none';
     });
+
+    // If bounces tab, load bounce data
+    if (mainTabId === 'bounces') {
+        updateBouncesTab();
+    }
+}
+
+// Switch subtab within a main tab
+function switchSubtab(subtabId) {
+    // Extract main tab from subtab ID (e.g., "infra" from "infra-overview")
+    const mainTab = subtabId.split('-')[0];
+    currentSubtabs[mainTab] = subtabId;
+
+    // Update subtab buttons within this main tab
+    const mainTabEl = document.getElementById(`main-tab-${mainTab}`);
+    if (!mainTabEl) return;
+
+    mainTabEl.querySelectorAll('.subtab-btn').forEach(btn => {
+        btn.classList.toggle('active', btn.dataset.subtab === subtabId);
+    });
+
+    // Show/hide subtab content within this main tab
+    mainTabEl.querySelectorAll('.subtab-content').forEach(content => {
+        content.style.display = content.id === `subtab-${subtabId}` ? 'block' : 'none';
+    });
+}
+
+// Show default tabs on load
+function showDefaultTabs() {
+    // Show main tab nav
+    document.getElementById('mainTabNav').style.display = 'flex';
+
+    // Show default main tab (infra)
+    switchMainTab('infra');
+
+    // Show default subtabs
+    switchSubtab('infra-overview');
+    switchSubtab('clients-overview');
 }
 
 // Update overview cards
@@ -357,25 +408,16 @@ function updateInfraTldTable(byInfraTld, filter) {
 function updateWarmupTable(byInfra) {
     const tbody = document.getElementById('warmupTableBody');
     tbody.innerHTML = '';
-    
+
     const sorted = Object.entries(byInfra)
         .sort((a, b) => b[1].mailbox_count - a[1].mailbox_count);
-    
+
     for (const [infraType, m] of sorted) {
-        const capacityPct = m.theoretical_max > 0 
-            ? ((m.current_capacity / m.theoretical_max) * 100).toFixed(1) 
-            : 0;
-        
         const row = document.createElement('tr');
         row.innerHTML = `
             <td class="${getInfraClass(infraType)}">${infraType}</td>
             <td>${m.mailbox_count || 0}</td>
             <td>${m.in_warmup || 0}</td>
-            <td>${m.ready || 0}</td>
-            <td>${(m.avg_warmup_limit || 0).toFixed(1)}</td>
-            <td>${formatNumber(m.current_capacity || 0)}</td>
-            <td>${formatNumber(m.theoretical_max || 0)}</td>
-            <td>${capacityPct}%</td>
         `;
         tbody.appendChild(row);
     }
@@ -1406,12 +1448,12 @@ function setLoading(isLoading) {
 
     const loadingEl = document.getElementById('loading');
     loadingEl.style.display = isLoading ? 'block' : 'none';
-    document.getElementById('tabNav').style.display = isLoading ? 'none' : 'flex';
+    document.getElementById('mainTabNav').style.display = isLoading ? 'none' : 'flex';
     document.getElementById('footer').style.display = isLoading ? 'none' : 'block';
 
     // Show active tab content
     if (!isLoading) {
-        switchTab(currentTab);
+        showDefaultTabs();
         // Reset retry count on successful load
         currentRetryCount = 0;
         // Reset loading message to default
@@ -1420,7 +1462,7 @@ function setLoading(isLoading) {
             <p>Loading data...</p>
         `;
     } else {
-        document.querySelectorAll('.tab-content').forEach(c => c.style.display = 'none');
+        document.querySelectorAll('.main-tab-content').forEach(c => c.style.display = 'none');
 
         // Set timeout to show "taking longer" message
         loadingTimeoutId = setTimeout(() => {
@@ -1532,13 +1574,10 @@ async function loadData(period, refresh = false) {
             updateWarmupTableFromSnapshot();
             await updateProjectionsFromSnapshot();
 
-            // Load bounce and domain data in background
-            updateBouncesTab();
-            populateDomainClientFilter();
-            updateDomainsTab();
-
             // Populate client analytics dropdown
             populateClientAnalyticsDropdown();
+
+            // Note: Bounce data is loaded when Bounces tab is clicked (independent date range)
 
             setLoading(false);
             return; // Success - exit the function
@@ -1604,9 +1643,7 @@ async function loadDataWithDateRange(start, end) {
             updateWarmupTableFromSnapshot();
             await updateProjectionsFromSnapshot();
 
-            // Load bounce and domain data
-            updateBouncesTab();
-            updateDomainsTab();
+            // Note: Bounce data is loaded when Bounces tab is clicked (independent date range)
 
             setLoading(false);
             return; // Success - exit the function
@@ -1723,10 +1760,41 @@ document.addEventListener('DOMContentLoaded', async () => {
         btn30d.title = '';
     }
 
-    // Tab buttons
-    document.querySelectorAll('.tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => switchTab(btn.dataset.tab));
+    // Main tab buttons
+    document.querySelectorAll('.main-tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchMainTab(btn.dataset.mainTab));
     });
+
+    // Subtab buttons
+    document.querySelectorAll('.subtab-btn').forEach(btn => {
+        btn.addEventListener('click', () => switchSubtab(btn.dataset.subtab));
+    });
+
+    // Bounce date picker
+    const bounceStartInput = document.getElementById('bounceStartDate');
+    const bounceEndInput = document.getElementById('bounceEndDate');
+    const applyBounceDateBtn = document.getElementById('applyBounceDate');
+
+    if (bounceStartInput && bounceEndInput && window.SupabaseClient) {
+        // Set default bounce date values
+        const latestDate = window.SupabaseClient.getLatestDataDate();
+        bounceEndInput.value = latestDate;
+        bounceStartInput.value = BOUNCE_DATA_START;
+
+        // Set constraints
+        bounceStartInput.min = BOUNCE_DATA_START;
+        bounceEndInput.min = BOUNCE_DATA_START;
+        bounceStartInput.max = latestDate;
+        bounceEndInput.max = latestDate;
+    }
+
+    if (applyBounceDateBtn) {
+        applyBounceDateBtn.addEventListener('click', () => {
+            bounceStartDate = bounceStartInput.value;
+            bounceEndDate = bounceEndInput.value;
+            updateBouncesTab();
+        });
+    }
 
     // Refresh button
     document.getElementById('refreshBtn').addEventListener('click', async () => {
@@ -1766,16 +1834,6 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (currentData) {
                 updateInfraTldTable(currentData.by_infra_tld || {}, infraTldFilter.value);
             }
-        });
-    }
-
-    // Domain client filter
-    const domainClientFilter = document.getElementById('domainClientFilter');
-    const applyDomainFilterBtn = document.getElementById('applyDomainFilter');
-    if (applyDomainFilterBtn) {
-        applyDomainFilterBtn.addEventListener('click', () => {
-            const filter = domainClientFilter?.value || 'all';
-            updateDomainsTab(filter);
         });
     }
 
