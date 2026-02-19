@@ -1492,7 +1492,7 @@ function showError(message, canRetry = true) {
 
     setLoading(false);
     document.getElementById('loading').style.display = 'block';
-    document.getElementById('tabNav').style.display = 'none';
+    document.getElementById('mainTabNav').style.display = 'none';
 
     const retryButton = canRetry ? `
         <button class="retry-btn" onclick="retryLoad()">Retry Now</button>
