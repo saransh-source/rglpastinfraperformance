@@ -1529,6 +1529,7 @@ async function fetchWithTimeout(fetchFn, timeoutMs = 30000) {
 
 // Main load function with retry logic
 async function loadData(period, refresh = false) {
+    console.log('loadData called with period:', period);
     currentPeriod = period;
     setLoading(true);
 
@@ -1667,12 +1668,13 @@ async function loadDataWithDateRange(start, end) {
 // Update loading progress message
 function updateLoadingStatus(message) {
     const loadingEl = document.getElementById('loading');
-    if (loadingEl && loadingEl.querySelector('.spinner')) {
+    if (loadingEl) {
         loadingEl.innerHTML = `
             <div class="spinner"></div>
             <p>${message}</p>
         `;
     }
+    console.log('Loading status:', message);
 }
 
 // Event listeners
@@ -1697,13 +1699,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
+    console.log('DOMContentLoaded: Starting initialization');
     updateLoadingStatus('Initializing...');
 
     // Load workspace map for bounce tab (non-blocking - don't wait if slow)
     window.SupabaseClient.fetchWorkspaces()
-        .then(map => { workspaceMap = map; })
+        .then(map => { workspaceMap = map; console.log('Workspace map loaded'); })
         .catch(e => console.warn('Failed to load workspace map:', e));
 
+    console.log('DOMContentLoaded: Updating status to Loading dashboard data...');
     updateLoadingStatus('Loading dashboard data...');
 
     // Set default date values and constraints
