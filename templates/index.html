@@ -7,35 +7,6 @@
     <link rel="stylesheet" href="/static/styles.css">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-    <script>
-        // Debug: Check if dependencies loaded
-        console.log('Chart.js loaded:', typeof Chart !== 'undefined');
-        console.log('Supabase SDK loaded:', typeof window.supabase !== 'undefined');
-
-        // Check for missing dependencies after a delay
-        setTimeout(() => {
-            if (typeof Chart === 'undefined') {
-                console.error('Chart.js failed to load from CDN');
-                document.getElementById('loading').innerHTML = `
-                    <div class="error">
-                        <p>Failed to load Chart.js from CDN</p>
-                        <p class="hint">Please check your internet connection and refresh the page.</p>
-                        <button class="retry-btn" onclick="location.reload()">Refresh Page</button>
-                    </div>
-                `;
-            }
-            if (typeof window.supabase === 'undefined') {
-                console.error('Supabase SDK failed to load from CDN');
-                document.getElementById('loading').innerHTML = `
-                    <div class="error">
-                        <p>Failed to load Supabase SDK from CDN</p>
-                        <p class="hint">Please check your internet connection and refresh the page.</p>
-                        <button class="retry-btn" onclick="location.reload()">Refresh Page</button>
-                    </div>
-                `;
-            }
-        }, 5000);
-    </script>
 </head>
 <body>
     <div class="container">
@@ -44,8 +15,23 @@
             <p class="subtitle">Email Infrastructure Analysis Dashboard</p>
         </header>
 
-        <!-- Time Period Selector -->
-        <div class="period-selector">
+        <!-- Loading State -->
+        <div id="loading" class="loading">
+            <div class="spinner"></div>
+            <p>Loading data...</p>
+        </div>
+
+        <!-- HTML VERSION: 2026-02-19-v3 - Restructured tabs -->
+        <!-- Main Tab Navigation -->
+        <div id="mainTabNav" class="main-tab-nav" style="display: none;">
+            <button class="main-tab-btn active" data-main-tab="infra">Infra</button>
+            <button class="main-tab-btn" data-main-tab="clients">Clients</button>
+            <button class="main-tab-btn" data-main-tab="bounces">Bounces</button>
+            <button class="main-tab-btn" data-main-tab="domains">Domains</button>
+        </div>
+
+        <!-- Date Picker (only for Infra and Clients tabs) -->
+        <div id="datePicker" class="period-selector" style="display: none;">
             <div class="quick-select">
                 <button class="period-btn" data-period="3d">3D</button>
                 <button class="period-btn" data-period="7d">7D</button>
@@ -64,21 +50,6 @@
             <span class="data-source" id="dataSourceLabel">Live Data</span>
         </div>
 
-        <!-- Loading State -->
-        <div id="loading" class="loading">
-            <div class="spinner"></div>
-            <p>Loading data...</p>
-        </div>
-
-        <!-- HTML VERSION: 2026-02-19-v2 - Main tab restructure -->
-        <!-- Main Tab Navigation -->
-        <div id="mainTabNav" class="main-tab-nav" style="display: none;">
-            <button class="main-tab-btn active" data-main-tab="infra">Infra</button>
-            <button class="main-tab-btn" data-main-tab="clients">Clients</button>
-            <button class="main-tab-btn" data-main-tab="bounces">Bounces</button>
-            <button class="main-tab-btn" data-main-tab="domains">Domains</button>
-        </div>
-
         <!-- ========================================== -->
         <!-- MAIN TAB: INFRA -->
         <!-- ========================================== -->
@@ -87,6 +58,7 @@
             <div class="subtab-nav">
                 <button class="subtab-btn active" data-subtab="infra-overview">Overview</button>
                 <button class="subtab-btn" data-subtab="infra-comparison">Comparison</button>
+                <button class="subtab-btn" data-subtab="infra-clients">By Client</button>
                 <button class="subtab-btn" data-subtab="infra-tld">TLD Analysis</button>
                 <button class="subtab-btn" data-subtab="infra-warmup">Warmup</button>
                 <button class="subtab-btn" data-subtab="infra-cost">Cost Projections</button>
@@ -141,33 +113,6 @@
                         <div class="card-value" id="positivesPerDay">-</div>
                     </div>
                 </div>
-
-                <!-- Agency-Wide Trend Charts -->
-                <div class="trends-section">
-                    <h3>Agency-Wide Performance Trends (Last 14 Days)</h3>
-                    <div class="charts-section">
-                        <div class="chart-container">
-                            <h4>Reply Rate Trend</h4>
-                            <canvas id="replyRateTrendChart"></canvas>
-                        </div>
-                        <div class="chart-container">
-                            <h4>Positive Rate Trend</h4>
-                            <canvas id="positiveRateTrendChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Charts Section -->
-                <div class="charts-section">
-                    <div class="chart-container">
-                        <h3>Sends by Infra Type</h3>
-                        <canvas id="sendsChart"></canvas>
-                    </div>
-                    <div class="chart-container">
-                        <h3>Positive Rate by Infra Type</h3>
-                        <canvas id="rateChart"></canvas>
-                    </div>
-                </div>
             </div>
 
             <!-- SUBTAB: Infra Comparison -->
@@ -197,14 +142,37 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
 
-                <!-- Infra Trend Chart -->
-                <div class="infra-trends-section">
-                    <h3>Infra Type Performance Trends (Last 14 Days)</h3>
-                    <div class="chart-container chart-wide">
-                        <h4>Positive Rate by Infra Type Over Time</h4>
-                        <canvas id="infraTrendChart"></canvas>
-                    </div>
+            <!-- SUBTAB: Infra by Client (moved from Clients tab) -->
+            <div id="subtab-infra-clients" class="subtab-content" style="display: none;">
+                <h2>Client / Infra Breakdown</h2>
+                <div class="filter-row">
+                    <label for="clientFilter">Select Client:</label>
+                    <select id="clientFilter">
+                        <option value="all">All Clients</option>
+                    </select>
+                </div>
+                <div class="table-wrapper">
+                    <table id="clientInfraBreakdownTable">
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Infra Type</th>
+                                <th>Mailboxes</th>
+                                <th>Domains</th>
+                                <th>Sends</th>
+                                <th>Replies</th>
+                                <th>Interested</th>
+                                <th>Reply %</th>
+                                <th>+ve %</th>
+                                <th>+ve Reply %</th>
+                                <th>Bounce %</th>
+                            </tr>
+                        </thead>
+                        <tbody id="clientInfraBreakdownTableBody">
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
@@ -320,139 +288,27 @@
         <!-- MAIN TAB: CLIENTS -->
         <!-- ========================================== -->
         <div id="main-tab-clients" class="main-tab-content" style="display: none;">
-            <!-- Clients Subtabs -->
-            <div class="subtab-nav">
-                <button class="subtab-btn active" data-subtab="clients-overview">Overview</button>
-                <button class="subtab-btn" data-subtab="clients-analytics">Analytics</button>
-            </div>
-
-            <!-- SUBTAB: Clients Overview -->
-            <div id="subtab-clients-overview" class="subtab-content">
-                <h2>Client / Infra Breakdown</h2>
-                <div class="filter-row">
-                    <label for="clientFilter">Select Client:</label>
-                    <select id="clientFilter">
-                        <option value="all">All Clients</option>
-                    </select>
-                </div>
-                <div class="table-wrapper">
-                    <table id="clientTable">
-                        <thead>
-                            <tr>
-                                <th>Client</th>
-                                <th>Infra Type</th>
-                                <th>Mailboxes</th>
-                                <th>Domains</th>
-                                <th>Sends</th>
-                                <th>Replies</th>
-                                <th>Interested</th>
-                                <th>Reply %</th>
-                                <th>+ve %</th>
-                                <th>+ve Reply %</th>
-                                <th>Bounce %</th>
-                            </tr>
-                        </thead>
-                        <tbody id="clientTableBody">
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            <!-- SUBTAB: Client Analytics -->
-            <div id="subtab-clients-analytics" class="subtab-content" style="display: none;">
-                <h2>Client Analytics</h2>
-                <div class="filter-row">
-                    <label for="clientAnalyticsSelect">Select Client:</label>
-                    <select id="clientAnalyticsSelect">
-                        <option value="">Select a client...</option>
-                    </select>
-                </div>
-
-                <!-- Placeholder when no client selected -->
-                <div id="clientAnalyticsPlaceholder" class="placeholder-message">
-                    <p>Select a client above to view their detailed analytics</p>
-                </div>
-
-                <!-- Client Summary Cards -->
-                <div id="clientSummaryCards" class="overview-cards" style="display: none;">
-                    <div class="card">
-                        <div class="card-label">Total Sends</div>
-                        <div class="card-value" id="clientTotalSends">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">Total Replies</div>
-                        <div class="card-value" id="clientTotalReplies">-</div>
-                    </div>
-                    <div class="card highlight">
-                        <div class="card-label">Positive Replies</div>
-                        <div class="card-value" id="clientTotalPositive">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">Reply Rate</div>
-                        <div class="card-value" id="clientReplyRate">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">+ve Rate</div>
-                        <div class="card-value" id="clientPositiveRate">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">Mailboxes</div>
-                        <div class="card-value" id="clientMailboxCount">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">+ve/Day</div>
-                        <div class="card-value" id="clientPositivesPerDay">-</div>
-                    </div>
-                </div>
-
-                <!-- Client Trend Charts -->
-                <div id="clientChartsContainer" style="display: none;">
-                    <h3>Performance Trends</h3>
-                    <div class="charts-section">
-                        <div class="chart-container">
-                            <h4>Send Volume (Daily)</h4>
-                            <canvas id="clientSendsChart"></canvas>
-                        </div>
-                        <div class="chart-container">
-                            <h4>Positive Rate Trend</h4>
-                            <canvas id="clientPositiveRateChart"></canvas>
-                        </div>
-                    </div>
-                    <div class="charts-section">
-                        <div class="chart-container">
-                            <h4>Reply Rate Trend</h4>
-                            <canvas id="clientReplyRateChart"></canvas>
-                        </div>
-                        <div class="chart-container">
-                            <h4>Performance by Infra Type</h4>
-                            <canvas id="clientInfraBreakdownChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Client Infra Table -->
-                <div id="clientInfraTableContainer" style="display: none;">
-                    <h3>Infrastructure Breakdown</h3>
-                    <div class="table-wrapper">
-                        <table id="clientInfraTable">
-                            <thead>
-                                <tr>
-                                    <th>Infra Type</th>
-                                    <th>Mailboxes</th>
-                                    <th>Domains</th>
-                                    <th>Sends</th>
-                                    <th>Replies</th>
-                                    <th>Interested</th>
-                                    <th>Reply %</th>
-                                    <th>+ve %</th>
-                                    <th>Bounce %</th>
-                                </tr>
-                            </thead>
-                            <tbody id="clientInfraTableBody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+            <h2>Client Performance Overview</h2>
+            <div class="table-wrapper">
+                <table id="clientOverviewTable">
+                    <thead>
+                        <tr>
+                            <th>Client</th>
+                            <th>Mailboxes</th>
+                            <th>Domains</th>
+                            <th>Sends</th>
+                            <th>Replies</th>
+                            <th>Interested</th>
+                            <th>Reply %</th>
+                            <th>+ve %</th>
+                            <th>+ve Reply %</th>
+                            <th>Bounce %</th>
+                            <th>+ve/Day</th>
+                        </tr>
+                    </thead>
+                    <tbody id="clientOverviewTableBody">
+                    </tbody>
+                </table>
             </div>
         </div>
 
@@ -472,7 +328,7 @@
                 <span class="bounce-date-note">Data available from Feb 18, 2026</span>
             </div>
 
-            <p class="section-desc">Data source: <span id="bounceDataSource" class="source-aggregate">loading...</span></p>
+            <p class="section-desc">Data source: <span id="bounceDataSource" class="source-aggregate">bounce_events table</span></p>
 
             <div class="bounce-overview-cards">
                 <div class="card">
@@ -481,24 +337,21 @@
                 </div>
                 <div class="card danger">
                     <div class="card-label">Hard Bounces</div>
-                    <div class="card-value" id="criticalBounces">-</div>
+                    <div class="card-value" id="hardBounces">-</div>
                 </div>
                 <div class="card warning">
                     <div class="card-label">Blocks</div>
-                    <div class="card-value" id="invalidAddressBounces">-</div>
+                    <div class="card-value" id="blockBounces">-</div>
                 </div>
                 <div class="card">
                     <div class="card-label">Soft Bounces</div>
-                    <div class="card-value" id="reputationBounces">-</div>
+                    <div class="card-value" id="softBounces">-</div>
                 </div>
             </div>
 
-            <div class="bounce-breakdown-section">
-                <div class="breakdown-card">
+            <div class="bounce-tables-section">
+                <div class="table-section">
                     <h3>By Bounce Type</h3>
-                    <div class="chart-container" style="max-width: 300px; margin: 0 auto;">
-                        <canvas id="bounceTypeChart"></canvas>
-                    </div>
                     <div class="table-wrapper">
                         <table id="bounceTypeTable">
                             <thead>
@@ -514,11 +367,8 @@
                     </div>
                 </div>
 
-                <div class="breakdown-card">
+                <div class="table-section">
                     <h3>By Infra Type</h3>
-                    <div class="chart-container" style="max-height: 300px;">
-                        <canvas id="bounceInfraChart"></canvas>
-                    </div>
                     <div class="table-wrapper">
                         <table id="bounceInfraTable">
                             <thead>
@@ -535,43 +385,40 @@
                 </div>
             </div>
 
-            <div class="bounce-breakdown-section">
-                <div class="breakdown-card full-width">
-                    <h3>By Workspace (Top 15)</h3>
-                    <div class="chart-container" style="max-height: 400px;">
-                        <canvas id="bounceWorkspaceChart"></canvas>
-                    </div>
-                    <div class="table-wrapper">
-                        <table id="bounceWorkspaceTable">
-                            <thead>
-                                <tr>
-                                    <th>Workspace</th>
-                                    <th>Bounces</th>
-                                    <th>Percentage</th>
-                                </tr>
-                            </thead>
-                            <tbody id="bounceWorkspaceTableBody">
-                            </tbody>
-                        </table>
-                    </div>
+            <div class="table-section">
+                <h3>By Workspace</h3>
+                <div class="table-wrapper">
+                    <table id="bounceWorkspaceTable">
+                        <thead>
+                            <tr>
+                                <th>Workspace</th>
+                                <th>Bounces</th>
+                                <th>Percentage</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bounceWorkspaceTableBody">
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <h3>Recent Bounce Events (from webhook)</h3>
-            <div class="table-wrapper">
-                <table id="bounceEventsTable">
-                    <thead>
-                        <tr>
-                            <th>Date</th>
-                            <th>Type</th>
-                            <th>Sender Domain</th>
-                            <th>Workspace</th>
-                            <th>Infra Type</th>
-                        </tr>
-                    </thead>
-                    <tbody id="bounceEventsTableBody">
-                    </tbody>
-                </table>
+            <div class="table-section">
+                <h3>Recent Bounce Events</h3>
+                <div class="table-wrapper">
+                    <table id="bounceEventsTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Type</th>
+                                <th>Sender Domain</th>
+                                <th>Workspace</th>
+                                <th>Infra Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="bounceEventsTableBody">
+                        </tbody>
+                    </table>
+                </div>
             </div>
         </div>
 
@@ -595,10 +442,9 @@
     <script src="/static/supabase-client.js"></script>
     <script src="/static/app.js"></script>
     <script>
-        // Global error handler to catch any uncaught errors
+        // Global error handler
         window.onerror = function(msg, url, lineNo, columnNo, error) {
             console.error('Global error:', msg, url, lineNo);
-            // Show error to user if still loading
             const loadingEl = document.getElementById('loading');
             if (loadingEl && loadingEl.style.display !== 'none') {
                 loadingEl.innerHTML = `
@@ -612,7 +458,6 @@
             return false;
         };
 
-        // Also catch unhandled promise rejections
         window.onunhandledrejection = function(event) {
             console.error('Unhandled promise rejection:', event.reason);
         };

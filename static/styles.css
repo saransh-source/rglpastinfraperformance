@@ -1110,3 +1110,38 @@ code {
 .btn-small:active {
     transform: translateY(0);
 }
+
+/* ======================
+   Bounce Tables Layout
+   ====================== */
+
+.bounce-tables-section {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    margin-bottom: 1.5rem;
+}
+
+.table-section {
+    margin-bottom: 1.5rem;
+}
+
+.table-section h3 {
+    font-size: 1rem;
+    margin: 0 0 0.75rem 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.no-data {
+    text-align: center;
+    color: var(--text-secondary);
+    padding: 2rem;
+    font-style: italic;
+}
+
+@media (max-width: 768px) {
+    .bounce-tables-section {
+        grid-template-columns: 1fr;
+    }
+}
