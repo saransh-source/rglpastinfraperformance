@@ -1,12 +1,22 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v3 (Restructured tabs, date picker per tab)
+// Version: 2026-02-19-v4 (Added charts/trends, client analytics)
 
-console.log('[APP VERSION] 2026-02-19-v3 - Restructured tabs');
+console.log('[APP VERSION] 2026-02-19-v4 - Charts and client analytics');
 
 let currentPeriod = '14d';
 let currentData = null;
 let currentBounceData = null;
 let workspaceMap = {};
+
+// Chart instances (for cleanup/update)
+let infraSendsChart = null;
+let infraPositiveRateChart = null;
+let dailySendsChart = null;
+let dailyPositiveRateChart = null;
+let clientInfraSendsChart = null;
+let clientInfraPositiveRateChart = null;
+let clientDailySendsChart = null;
+let clientDailyPositiveRateChart = null;
 
 // Main tab and subtab state
 let currentMainTab = 'infra';
@@ -495,6 +505,491 @@ function calculateProjections(byInfra) {
 }
 
 // ======================
+// Chart Functions
+// ======================
+
+function destroyChart(chartInstance) {
+    if (chartInstance) {
+        chartInstance.destroy();
+    }
+    return null;
+}
+
+function createBarChart(ctx, labels, data, label, color) {
+    return new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: label,
+                data: data,
+                backgroundColor: color,
+                borderColor: color,
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function createMultiBarChart(ctx, labels, datasets) {
+    return new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function createLineChart(ctx, labels, data, label, color) {
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: label,
+                data: data,
+                borderColor: color,
+                backgroundColor: color + '20',
+                fill: true,
+                tension: 0.3
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+function createMultiLineChart(ctx, labels, datasets) {
+    return new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: datasets
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { position: 'top' }
+            },
+            scales: {
+                y: { beginAtZero: true }
+            }
+        }
+    });
+}
+
+// Update Infra Overview Charts
+function updateInfraCharts(byInfra) {
+    if (!byInfra) return;
+
+    // Get sorted infra types by sends
+    const sorted = Object.entries(byInfra)
+        .filter(([_, m]) => m.sent > 0)
+        .sort((a, b) => b[1].sent - a[1].sent);
+
+    const labels = sorted.map(([name]) => name);
+    const sends = sorted.map(([_, m]) => m.sent);
+    const positiveRates = sorted.map(([_, m]) => m.positive_rate || 0);
+    const colors = labels.map(name => infraColors[name] || '#6b7280');
+
+    // Sends by Infra Chart
+    const sendsCtx = document.getElementById('infraSendsChart');
+    if (sendsCtx) {
+        infraSendsChart = destroyChart(infraSendsChart);
+        infraSendsChart = new Chart(sendsCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Sends',
+                    data: sends,
+                    backgroundColor: colors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // Positive Rate by Infra Chart
+    const rateCtx = document.getElementById('infraPositiveRateChart');
+    if (rateCtx) {
+        infraPositiveRateChart = destroyChart(infraPositiveRateChart);
+        infraPositiveRateChart = new Chart(rateCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '+ve Rate %',
+                    data: positiveRates,
+                    backgroundColor: colors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (value) => value.toFixed(2) + '%'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// Update Daily Trends Charts
+async function updateDailyTrendsCharts() {
+    if (!window.SupabaseClient) return;
+
+    const days = PERIOD_DAYS[currentPeriod] || 14;
+    const trends = await window.SupabaseClient.fetchDailyTrends(days);
+
+    if (!trends || trends.length === 0) return;
+
+    const labels = trends.map(t => t.date.slice(5)); // MM-DD format
+    const sends = trends.map(t => t.sent);
+    const replies = trends.map(t => t.replied);
+    const positiveRates = trends.map(t => t.positive_rate);
+
+    // Daily Sends & Replies Chart
+    const sendsCtx = document.getElementById('dailySendsChart');
+    if (sendsCtx) {
+        dailySendsChart = destroyChart(dailySendsChart);
+        dailySendsChart = new Chart(sendsCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Sends',
+                        data: sends,
+                        borderColor: '#3b82f6',
+                        backgroundColor: '#3b82f620',
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Replies',
+                        data: replies,
+                        borderColor: '#10b981',
+                        backgroundColor: '#10b98120',
+                        fill: true,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // Daily Positive Rate Chart
+    const rateCtx = document.getElementById('dailyPositiveRateChart');
+    if (rateCtx) {
+        dailyPositiveRateChart = destroyChart(dailyPositiveRateChart);
+        dailyPositiveRateChart = new Chart(rateCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '+ve Rate %',
+                    data: positiveRates,
+                    borderColor: '#8b5cf6',
+                    backgroundColor: '#8b5cf620',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (value) => value.toFixed(2) + '%'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// ======================
+// Client Analytics Functions
+// ======================
+
+function populateClientSelector(byClient) {
+    const selector = document.getElementById('clientSelector');
+    if (!selector || !byClient) return;
+
+    // Clear existing options except the first placeholder
+    selector.innerHTML = '<option value="">-- Select a Client --</option>';
+
+    // Add clients sorted alphabetically
+    const clients = Object.keys(byClient).sort();
+    for (const client of clients) {
+        const option = document.createElement('option');
+        option.value = client;
+        option.textContent = client;
+        selector.appendChild(option);
+    }
+}
+
+async function loadClientAnalytics(clientName) {
+    if (!clientName || !window.SupabaseClient) {
+        document.getElementById('clientOverviewSection').style.display = 'none';
+        document.getElementById('noClientSelected').style.display = 'block';
+        return;
+    }
+
+    document.getElementById('noClientSelected').style.display = 'none';
+    document.getElementById('clientOverviewSection').style.display = 'block';
+    document.getElementById('selectedClientName').textContent = clientName + ' - Overview';
+
+    const analytics = await window.SupabaseClient.fetchClientAnalytics(clientName);
+
+    if (!analytics) return;
+
+    // Update summary cards
+    const totals = analytics.totals || {};
+    const el = (id) => document.getElementById(id);
+    if (el('clientTotalSends')) el('clientTotalSends').textContent = formatNumber(totals.sent || 0);
+    if (el('clientTotalReplies')) el('clientTotalReplies').textContent = formatNumber(totals.replied || 0);
+    if (el('clientTotalPositive')) el('clientTotalPositive').textContent = totals.interested || 0;
+    if (el('clientReplyRate')) el('clientReplyRate').textContent = (totals.reply_rate || 0).toFixed(2) + '%';
+    if (el('clientPositiveRate')) el('clientPositiveRate').textContent = (totals.positive_rate || 0).toFixed(3) + '%';
+    if (el('clientPositivesPerDay')) el('clientPositivesPerDay').textContent = (totals.positives_per_day || 0).toFixed(1);
+    if (el('clientMailboxCount')) el('clientMailboxCount').textContent = formatNumber(totals.mailbox_count || 0);
+
+    // Update infra breakdown table
+    updateClientInfraTable(analytics.byInfra);
+
+    // Update infra charts
+    updateClientInfraCharts(analytics.byInfra);
+
+    // Update daily trends charts
+    updateClientDailyTrendsCharts(analytics.byDate);
+}
+
+function updateClientInfraTable(byInfra) {
+    const tbody = document.getElementById('clientInfraTableBody');
+    if (!tbody || !byInfra) return;
+    tbody.innerHTML = '';
+
+    const sorted = Object.entries(byInfra).sort((a, b) => b[1].sent - a[1].sent);
+
+    for (const [infraType, m] of sorted) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td class="${getInfraClass(infraType)}">${infraType}</td>
+            <td>${m.mailbox_count || 0}</td>
+            <td>${m.domain_count || 0}</td>
+            <td>${formatNumber(m.sent)}</td>
+            <td>${formatNumber(m.replied)}</td>
+            <td class="highlight-col">${m.interested || 0}</td>
+            <td>${(m.reply_rate || 0).toFixed(2)}%</td>
+            <td class="highlight-col">${(m.positive_rate || 0).toFixed(3)}%</td>
+            <td>${(m.bounce_rate || 0).toFixed(2)}%</td>
+        `;
+        tbody.appendChild(row);
+    }
+}
+
+function updateClientInfraCharts(byInfra) {
+    if (!byInfra) return;
+
+    const sorted = Object.entries(byInfra)
+        .filter(([_, m]) => m.sent > 0)
+        .sort((a, b) => b[1].sent - a[1].sent);
+
+    const labels = sorted.map(([name]) => name);
+    const sends = sorted.map(([_, m]) => m.sent);
+    const positiveRates = sorted.map(([_, m]) => m.positive_rate || 0);
+    const colors = labels.map(name => infraColors[name] || '#6b7280');
+
+    // Sends by Infra Chart
+    const sendsCtx = document.getElementById('clientInfraSendsChart');
+    if (sendsCtx) {
+        clientInfraSendsChart = destroyChart(clientInfraSendsChart);
+        clientInfraSendsChart = new Chart(sendsCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Sends',
+                    data: sends,
+                    backgroundColor: colors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // Positive Rate by Infra Chart
+    const rateCtx = document.getElementById('clientInfraPositiveRateChart');
+    if (rateCtx) {
+        clientInfraPositiveRateChart = destroyChart(clientInfraPositiveRateChart);
+        clientInfraPositiveRateChart = new Chart(rateCtx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '+ve Rate %',
+                    data: positiveRates,
+                    backgroundColor: colors
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (value) => value.toFixed(2) + '%'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+function updateClientDailyTrendsCharts(byDate) {
+    if (!byDate) return;
+
+    const sortedDates = Object.keys(byDate).sort();
+    const labels = sortedDates.map(d => d.slice(5)); // MM-DD format
+    const sends = sortedDates.map(d => byDate[d].sent || 0);
+    const replies = sortedDates.map(d => byDate[d].replied || 0);
+    const positiveRates = sortedDates.map(d => {
+        const s = byDate[d];
+        return s.sent > 0 ? (s.interested / s.sent) * 100 : 0;
+    });
+
+    // Daily Sends & Replies Chart
+    const sendsCtx = document.getElementById('clientDailySendsChart');
+    if (sendsCtx) {
+        clientDailySendsChart = destroyChart(clientDailySendsChart);
+        clientDailySendsChart = new Chart(sendsCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Sends',
+                        data: sends,
+                        borderColor: '#3b82f6',
+                        backgroundColor: '#3b82f620',
+                        fill: true,
+                        tension: 0.3
+                    },
+                    {
+                        label: 'Replies',
+                        data: replies,
+                        borderColor: '#10b981',
+                        backgroundColor: '#10b98120',
+                        fill: true,
+                        tension: 0.3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { position: 'top' } },
+                scales: { y: { beginAtZero: true } }
+            }
+        });
+    }
+
+    // Daily Positive Rate Chart
+    const rateCtx = document.getElementById('clientDailyPositiveRateChart');
+    if (rateCtx) {
+        clientDailyPositiveRateChart = destroyChart(clientDailyPositiveRateChart);
+        clientDailyPositiveRateChart = new Chart(rateCtx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: '+ve Rate %',
+                    data: positiveRates,
+                    borderColor: '#8b5cf6',
+                    backgroundColor: '#8b5cf620',
+                    fill: true,
+                    tension: 0.3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: {
+                            callback: (value) => value.toFixed(2) + '%'
+                        }
+                    }
+                }
+            }
+        });
+    }
+}
+
+// ======================
 // Bounce Tab Functions
 // ======================
 
@@ -769,9 +1264,17 @@ async function loadData(period, refresh = false) {
             updateOverview(data.totals, data.meta);
             updateInfraTable(data.by_infra || {});
             updateClientInfraBreakdownTable(data.by_client || {});
-            updateClientOverviewTable(data.by_client || {});
             updateTldTables(data.by_tld || {}, data.by_infra_tld || {});
             updateMeta(data.meta || { start_date: '-', end_date: '-', days: 0, generated_at: new Date().toISOString() });
+
+            // Update infra charts
+            updateInfraCharts(data.by_infra || {});
+
+            // Update daily trends charts (async, non-blocking)
+            updateDailyTrendsCharts();
+
+            // Populate client selector
+            populateClientSelector(data.by_client || {});
 
             // Load time-independent tabs
             await fetchAndCacheLatestSnapshot();
@@ -814,9 +1317,17 @@ async function loadDataWithDateRange(start, end) {
             updateOverview(data.totals, data.meta);
             updateInfraTable(data.by_infra || {});
             updateClientInfraBreakdownTable(data.by_client || {});
-            updateClientOverviewTable(data.by_client || {});
             updateTldTables(data.by_tld || {}, data.by_infra_tld || {});
             updateMeta(data.meta);
+
+            // Update infra charts
+            updateInfraCharts(data.by_infra || {});
+
+            // Update daily trends charts
+            updateDailyTrendsCharts();
+
+            // Populate client selector
+            populateClientSelector(data.by_client || {});
 
             if (!latestInfraSnapshot) {
                 await fetchAndCacheLatestSnapshot();
@@ -989,6 +1500,15 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (currentData) {
                 updateInfraTldTable(currentData.by_infra_tld || {}, infraTldFilter.value);
             }
+        });
+    }
+
+    // Client selector (Clients tab)
+    const clientSelector = document.getElementById('clientSelector');
+    if (clientSelector) {
+        clientSelector.addEventListener('change', () => {
+            const selectedClient = clientSelector.value;
+            loadClientAnalytics(selectedClient);
         });
     }
 

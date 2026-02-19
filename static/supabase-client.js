@@ -697,12 +697,55 @@ async function fetchClients() {
  * @returns {Promise<Object>} - Bounce breakdown by type, workspace, infra
  */
 async function fetchBounces(startDate, endDate) {
+    console.log(`fetchBounces called with startDate=${startDate}, endDate=${endDate}`);
+
     // Try to fetch from bounce_events table (webhook-collected detailed data)
-    const { data: bounceEvents, error: bounceError } = await supabaseClient
+    // First, try with event_date column
+    let { data: bounceEvents, error: bounceError } = await supabaseClient
         .from('bounce_events')
-        .select('event_date, workspace_name, infra_type, bounce_type, sender_domain')
+        .select('*')
         .gte('event_date', startDate)
         .lte('event_date', endDate);
+
+    console.log('bounce_events query result:', {
+        count: bounceEvents?.length || 0,
+        error: bounceError?.message || null
+    });
+
+    // If no data with event_date filter, try without date filter to check if table has data
+    if ((!bounceEvents || bounceEvents.length === 0) && !bounceError) {
+        console.log('No bounce data with date filter, checking table contents...');
+        const { data: allBounces, error: allError } = await supabaseClient
+            .from('bounce_events')
+            .select('*')
+            .limit(10);
+
+        if (allBounces && allBounces.length > 0) {
+            console.log('Table has data! Sample row:', allBounces[0]);
+            console.log('Available columns:', Object.keys(allBounces[0]));
+
+            // Check if dates are stored differently
+            const sampleDate = allBounces[0].event_date || allBounces[0].created_at;
+            console.log('Sample date value:', sampleDate);
+
+            // Try fetching all records and filter in JS if date format is the issue
+            const { data: allData, error: fetchError } = await supabaseClient
+                .from('bounce_events')
+                .select('*');
+
+            if (allData && allData.length > 0) {
+                console.log(`Fetched all ${allData.length} bounce events, filtering in JS...`);
+                // Filter by date in JavaScript
+                bounceEvents = allData.filter(row => {
+                    const eventDate = (row.event_date || row.created_at || '').split('T')[0];
+                    return eventDate >= startDate && eventDate <= endDate;
+                });
+                console.log(`After date filter: ${bounceEvents.length} events`);
+            }
+        } else {
+            console.log('bounce_events table is empty or inaccessible:', allError?.message);
+        }
+    }
 
     // If bounce_events table exists and has data, use it
     if (!bounceError && bounceEvents && bounceEvents.length > 0) {
@@ -715,21 +758,30 @@ async function fetchBounces(startDate, endDate) {
 
         for (const row of bounceEvents) {
             // By bounce type
-            const type = row.bounce_type || 'unknown';
+            const type = row.bounce_type || row.type || 'unknown';
             byType[type] = (byType[type] || 0) + 1;
 
             // By workspace
-            const ws = row.workspace_name || 'Unknown';
+            const ws = row.workspace_name || row.workspace || 'Unknown';
             byWorkspace[ws] = (byWorkspace[ws] || 0) + 1;
 
             // By infra type
-            const infra = row.infra_type || 'Unknown';
+            const infra = row.infra_type || row.infra || 'Unknown';
             byInfra[infra] = (byInfra[infra] || 0) + 1;
 
             // By sender domain
-            const domain = row.sender_domain || 'unknown';
+            const domain = row.sender_domain || row.domain || 'unknown';
             byDomain[domain] = (byDomain[domain] || 0) + 1;
         }
+
+        // Normalize raw data for display
+        const normalizedRaw = bounceEvents.map(row => ({
+            event_date: row.event_date || row.created_at || '-',
+            bounce_type: row.bounce_type || row.type || 'unknown',
+            workspace_name: row.workspace_name || row.workspace || '-',
+            infra_type: row.infra_type || row.infra || '-',
+            sender_domain: row.sender_domain || row.domain || '-'
+        }));
 
         return {
             total: bounceEvents.length,
@@ -738,7 +790,7 @@ async function fetchBounces(startDate, endDate) {
             by_infra: byInfra,
             by_domain: byDomain,
             source: 'bounce_events (webhook)',
-            raw: bounceEvents
+            raw: normalizedRaw
         };
     }
 

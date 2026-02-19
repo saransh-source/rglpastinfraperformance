@@ -362,10 +362,22 @@ header h1 {
 
 /* Charts Section */
 .charts-section {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.charts-section h3 {
+    font-size: 1.1rem;
+    margin: 0 0 1rem 0;
+    color: var(--text-secondary);
+    font-weight: 500;
+}
+
+.charts-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 1.5rem;
-    margin-top: 1.5rem;
 }
 
 .chart-container {
@@ -373,13 +385,18 @@ header h1 {
     border: 1px solid var(--border-color);
     border-radius: 12px;
     padding: 1.5rem;
+    min-height: 300px;
 }
 
-.chart-container h3 {
-    font-size: 0.95rem;
+.chart-container h4 {
+    font-size: 0.9rem;
     color: var(--text-secondary);
-    margin: 0 0 1rem 0;
+    margin: 0 0 0.75rem 0;
     font-weight: 500;
+}
+
+.chart-container canvas {
+    max-height: 250px;
 }
 
 /* Filter Row */
@@ -1144,4 +1161,62 @@ code {
     .bounce-tables-section {
         grid-template-columns: 1fr;
     }
+}
+
+/* ======================
+   Client Selector Styles
+   ====================== */
+
+.client-selector {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+    padding: 1rem;
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.client-selector label {
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+.client-selector select {
+    padding: 0.625rem 1rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    color: var(--text-primary);
+    font-size: 0.95rem;
+    border-radius: 6px;
+    cursor: pointer;
+    min-width: 250px;
+    font-family: inherit;
+}
+
+.client-selector select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+#clientOverviewSection {
+    animation: fadeIn 0.2s ease;
+}
+
+#clientOverviewSection h2 {
+    font-size: 1.35rem;
+    margin-bottom: 1.5rem;
+    color: var(--text-primary);
+}
+
+#clientOverviewSection .table-section {
+    margin-top: 2rem;
+}
+
+#clientOverviewSection .table-section h3 {
+    font-size: 1.1rem;
+    margin: 0 0 1rem 0;
+    color: var(--text-secondary);
+    font-weight: 500;
 }
