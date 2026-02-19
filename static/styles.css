@@ -1280,6 +1280,134 @@ code {
     font-style: italic;
 }
 
+/* ======================
+   Bounce Events Controls
+   ====================== */
+
+.bounce-events-controls {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.bounce-events-controls select {
+    padding: 0.5rem 0.75rem;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-radius: 6px;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.bounce-events-controls select:focus {
+    outline: none;
+    border-color: var(--accent-primary);
+}
+
+/* ======================
+   Action Badges
+   ====================== */
+
+.action-badge {
+    display: inline-block;
+    padding: 0.2rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+}
+
+.action-badge-critical {
+    background: rgba(239, 68, 68, 0.2);
+    color: var(--accent-red);
+    border: 1px solid var(--accent-red);
+}
+
+.action-badge-warning {
+    background: rgba(245, 158, 11, 0.2);
+    color: var(--accent-yellow);
+    border: 1px solid var(--accent-yellow);
+}
+
+.action-badge-info {
+    background: rgba(59, 130, 246, 0.2);
+    color: var(--accent-primary);
+    border: 1px solid var(--accent-primary);
+}
+
+/* ======================
+   Severity Indicators
+   ====================== */
+
+.severity-critical {
+    color: var(--accent-red);
+    font-weight: 500;
+}
+
+.severity-warning {
+    color: var(--accent-yellow);
+    font-weight: 500;
+}
+
+.severity-info {
+    color: var(--text-secondary);
+}
+
+/* ======================
+   MX Provider Colors
+   ====================== */
+
+.mx-google {
+    color: #4285f4;
+    font-weight: 500;
+}
+
+.mx-microsoft {
+    color: #00a4ef;
+    font-weight: 500;
+}
+
+.mx-mimecast {
+    color: #ff6b35;
+    font-weight: 500;
+}
+
+.mx-barracuda {
+    color: #00b388;
+    font-weight: 500;
+}
+
+.mx-proofpoint {
+    color: #e6002d;
+    font-weight: 500;
+}
+
+.mx-other {
+    color: var(--text-secondary);
+}
+
+.mx-unknown {
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+/* ======================
+   Message Preview
+   ====================== */
+
+.message-preview {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: help;
+}
+
 @media (max-width: 768px) {
     .bounce-tables-section {
         grid-template-columns: 1fr;

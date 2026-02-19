@@ -53,14 +53,15 @@ def extract_tld(domain: str) -> str:
     return "." + domain.split(".")[-1].lower()
 
 
-def supabase_upsert(table: str, data: list, on_conflict: str = None) -> dict:
+def supabase_upsert(table: str, data: list, on_conflict: str = None, batch_size: int = 500) -> dict:
     """
-    Upsert data to Supabase table
+    Upsert data to Supabase table in batches
 
     Args:
         table: Table name
         data: List of records to upsert
         on_conflict: Column(s) to use for conflict resolution (comma-separated)
+        batch_size: Number of records per batch (default 500 to avoid payload limits)
     """
     if not data:
         return {"status": "skipped", "count": 0}
@@ -77,15 +78,25 @@ def supabase_upsert(table: str, data: list, on_conflict: str = None) -> dict:
     if on_conflict:
         url += f"?on_conflict={on_conflict}"
 
-    try:
-        response = requests.post(url, json=data, headers=headers)
-        response.raise_for_status()
-        return {"status": "success", "count": len(data)}
-    except requests.exceptions.RequestException as e:
-        print(f"Supabase error on {table}: {e}")
-        if hasattr(e, 'response') and e.response is not None:
-            print(f"Response: {e.response.text}")
-        return {"status": "error", "error": str(e)}
+    total_inserted = 0
+    errors = []
+
+    # Process in batches to avoid Supabase payload size limits
+    for i in range(0, len(data), batch_size):
+        batch = data[i:i + batch_size]
+        try:
+            response = requests.post(url, json=batch, headers=headers)
+            response.raise_for_status()
+            total_inserted += len(batch)
+        except requests.exceptions.RequestException as e:
+            print(f"Supabase error on {table} (batch {i//batch_size + 1}): {e}")
+            if hasattr(e, 'response') and e.response is not None:
+                print(f"Response: {e.response.text}")
+            errors.append(str(e))
+
+    if errors:
+        return {"status": "partial", "count": total_inserted, "errors": errors}
+    return {"status": "success", "count": total_inserted}
 
 
 def fetch_all_mailboxes_with_details() -> list:

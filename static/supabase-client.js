@@ -1,6 +1,7 @@
 // Supabase Client for RGL Infra Dashboard
 // Handles all database queries for dynamic data
 // Updated to use new tables: daily_infra_stats, daily_domain_stats, mailbox_snapshots
+// v11: MX provider and infra_type are pre-populated in Supabase (no client-side lookups)
 
 const SUPABASE_URL = 'https://fxxjfgfnrywffjmxoadl.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4eGpmZ2Zucnl3ZmZqbXhvYWRsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM2MTg4MzUsImV4cCI6MjA3OTE5NDgzNX0.i3CdO1d81qn8IuVM9nbCiFseIaVqPpNAIuVVE9JH8U8';
@@ -16,6 +17,11 @@ try {
 } catch (error) {
     console.error('Failed to initialize Supabase client:', error);
 }
+
+// NOTE: MX provider detection and infra_type enrichment now happen at INSERT time
+// in Supabase via n8n webhook. The bounce_events table has these columns pre-populated:
+// - mx_provider: Google, Microsoft, Mimecast, Barracuda, Proofpoint, Other, Unknown
+// - infra_type: Enriched from sender_email lookup in mailbox_snapshots
 
 // Tracked infra types (matching config.py - raw tag names, no merging)
 const TRACKED_INFRA_TYPES = [
@@ -692,15 +698,30 @@ async function fetchClients() {
 /**
  * Fetch bounce events with breakdown from bounce_events table (webhook data)
  * Falls back to aggregate bounces from daily_infra_stats if no webhook data
+ * Includes: infra enrichment, workspace send volumes, MX provider detection
  * @param {string} startDate - YYYY-MM-DD format
  * @param {string} endDate - YYYY-MM-DD format
- * @returns {Promise<Object>} - Bounce breakdown by type, workspace, infra
+ * @returns {Promise<Object>} - Bounce breakdown by type, workspace, infra, MX provider
  */
 async function fetchBounces(startDate, endDate) {
     console.log(`fetchBounces called with startDate=${startDate}, endDate=${endDate}`);
 
+    // Fetch workspace send volumes for bounce rate context
+    const { data: sendData } = await supabaseClient
+        .from('daily_infra_stats')
+        .select('workspace_name, emails_sent')
+        .gte('date', startDate)
+        .lte('date', endDate);
+
+    // Aggregate sends by workspace
+    const sendsByWorkspace = {};
+    let totalSends = 0;
+    for (const row of sendData || []) {
+        sendsByWorkspace[row.workspace_name] = (sendsByWorkspace[row.workspace_name] || 0) + (row.emails_sent || 0);
+        totalSends += row.emails_sent || 0;
+    }
+
     // Try to fetch from bounce_events table (webhook-collected detailed data)
-    // First, try with event_date column
     let { data: bounceEvents, error: bounceError } = await supabaseClient
         .from('bounce_events')
         .select('*')
@@ -724,12 +745,8 @@ async function fetchBounces(startDate, endDate) {
             console.log('Table has data! Sample row:', allBounces[0]);
             console.log('Available columns:', Object.keys(allBounces[0]));
 
-            // Check if dates are stored differently
-            const sampleDate = allBounces[0].event_date || allBounces[0].created_at;
-            console.log('Sample date value:', sampleDate);
-
             // Try fetching all records and filter in JS if date format is the issue
-            const { data: allData, error: fetchError } = await supabaseClient
+            const { data: allData } = await supabaseClient
                 .from('bounce_events')
                 .select('*');
 
@@ -751,10 +768,14 @@ async function fetchBounces(startDate, endDate) {
     if (!bounceError && bounceEvents && bounceEvents.length > 0) {
         console.log(`Found ${bounceEvents.length} detailed bounce events from webhook`);
 
+        // NOTE: infra_type and mx_provider are already populated in Supabase at insert time
+        // No client-side lookups needed - just read the data directly
+
         const byType = {};
         const byWorkspace = {};
         const byInfra = {};
         const byDomain = {};
+        const byMXProvider = {};
 
         for (const row of bounceEvents) {
             // By bounce type
@@ -765,13 +786,17 @@ async function fetchBounces(startDate, endDate) {
             const ws = row.workspace_name || row.workspace || 'Unknown';
             byWorkspace[ws] = (byWorkspace[ws] || 0) + 1;
 
-            // By infra type
-            const infra = row.infra_type || row.infra || 'Unknown';
+            // By infra type (pre-populated in Supabase)
+            const infra = row.infra_type || 'Unknown';
             byInfra[infra] = (byInfra[infra] || 0) + 1;
 
             // By sender domain
             const domain = row.sender_domain || row.domain || 'unknown';
             byDomain[domain] = (byDomain[domain] || 0) + 1;
+
+            // By MX provider (pre-populated in Supabase)
+            const mxProvider = row.mx_provider || 'Unknown';
+            byMXProvider[mxProvider] = (byMXProvider[mxProvider] || 0) + 1;
         }
 
         // Normalize raw data for display
@@ -779,8 +804,12 @@ async function fetchBounces(startDate, endDate) {
             event_date: row.event_date || row.created_at || '-',
             bounce_type: row.bounce_type || row.type || 'unknown',
             workspace_name: row.workspace_name || row.workspace || '-',
-            infra_type: row.infra_type || row.infra || '-',
-            sender_domain: row.sender_domain || row.domain || '-'
+            infra_type: row.infra_type || '-',
+            sender_domain: row.sender_domain || row.domain || '-',
+            sender_email: row.sender_email || '-',
+            recipient_domain: row.recipient_domain || row.recipient_email?.split('@')[1] || '-',
+            mx_provider: row.mx_provider || 'Unknown',
+            raw_message: row.raw_message || row.message || ''
         }));
 
         return {
@@ -789,6 +818,9 @@ async function fetchBounces(startDate, endDate) {
             by_workspace: byWorkspace,
             by_infra: byInfra,
             by_domain: byDomain,
+            by_mx_provider: byMXProvider,
+            workspace_send_volumes: sendsByWorkspace,
+            total_sends: totalSends,
             source: 'bounce_events (webhook)',
             raw: normalizedRaw
         };
@@ -811,6 +843,9 @@ async function fetchBounces(startDate, endDate) {
             by_workspace: {},
             by_infra: {},
             by_domain: {},
+            by_mx_provider: {},
+            workspace_send_volumes: sendsByWorkspace,
+            total_sends: totalSends,
             source: 'none',
             raw: []
         };
@@ -837,6 +872,9 @@ async function fetchBounces(startDate, endDate) {
         by_workspace: byWorkspace,
         by_infra: byInfra,
         by_domain: {},
+        by_mx_provider: {},
+        workspace_send_volumes: sendsByWorkspace,
+        total_sends: totalSends,
         source: 'daily_infra_stats (aggregate)',
         raw: []
     };

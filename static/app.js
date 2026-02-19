@@ -1,7 +1,41 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v9 (Fix infra type name mapping for cost projections)
+// Version: 2026-02-19-v11 (Enhanced Bounces Tab - MX/Infra pre-populated in Supabase)
 
-console.log('[APP VERSION] 2026-02-19-v9 - Fix infra type name mapping for cost projections');
+console.log('[APP VERSION] 2026-02-19-v11 - Enhanced Bounces Tab - MX/Infra pre-populated in Supabase');
+
+// Bounce type explanations with severity and actions
+const BOUNCE_TYPE_EXPLANATIONS = {
+    'hard_bounce': {
+        short: 'Permanent failure',
+        detail: 'Invalid recipient address. Email will never be delivered.',
+        severity: 'critical',
+        action: 'Remove'
+    },
+    'soft_bounce': {
+        short: 'Temporary issue',
+        detail: 'Mailbox full, server down, or rate limited.',
+        severity: 'warning',
+        action: 'Retry'
+    },
+    'block': {
+        short: 'Server blocked',
+        detail: 'Blocked by recipient server. Possible reputation issue.',
+        severity: 'warning',
+        action: 'Investigate'
+    },
+    'complaint': {
+        short: 'Spam report',
+        detail: 'Recipient marked email as spam.',
+        severity: 'critical',
+        action: 'Remove'
+    },
+    'unknown': {
+        short: 'Unclassified',
+        detail: 'Could not determine bounce type from message.',
+        severity: 'info',
+        action: 'Review'
+    }
+};
 
 let currentPeriod = '14d';
 let currentData = null;
@@ -1207,11 +1241,18 @@ function updateBounceTypeTable(bounceData) {
 
     for (const [type, count] of sorted) {
         const pct = ((count / total) * 100).toFixed(1);
+        const explanation = BOUNCE_TYPE_EXPLANATIONS[type] || BOUNCE_TYPE_EXPLANATIONS['unknown'];
+        const severityClass = `severity-${explanation.severity}`;
+        const actionClass = explanation.severity === 'critical' ? 'action-badge-critical' :
+                           explanation.severity === 'warning' ? 'action-badge-warning' : 'action-badge-info';
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td class="bounce-type-${type.replace(/_/g, '-')}">${formatBounceType(type)}</td>
+            <td class="${severityClass}" title="${explanation.detail}">${explanation.short}</td>
             <td>${formatNumber(count)}</td>
             <td>${pct}%</td>
+            <td><span class="action-badge ${actionClass}">${explanation.action}</span></td>
         `;
         tbody.appendChild(row);
     }
@@ -1242,16 +1283,48 @@ function updateBounceWorkspaceTable(bounceData) {
     if (!tbody || !bounceData) return;
     tbody.innerHTML = '';
 
-    const total = bounceData.total || 1;
-    const sorted = Object.entries(bounceData.by_workspace || {}).sort((a, b) => b[1] - a[1]).slice(0, 20);
+    const totalBounces = bounceData.total || 1;
+    const sendVolumes = bounceData.workspace_send_volumes || {};
+    const totalSends = bounceData.total_sends || 1;
 
-    for (const [wsName, count] of sorted) {
-        const pct = ((count / total) * 100).toFixed(1);
+    // Calculate overall bounce rate for comparison
+    const overallBounceRate = (totalBounces / totalSends) * 100;
+
+    // Build workspace data with bounce rates
+    const workspaceData = [];
+    for (const [wsName, bounces] of Object.entries(bounceData.by_workspace || {})) {
+        const sends = sendVolumes[wsName] || 0;
+        const bounceRate = sends > 0 ? (bounces / sends) * 100 : 0;
+        const pctOfBounces = (bounces / totalBounces) * 100;
+        const rateVsAvg = overallBounceRate > 0 ? (bounceRate / overallBounceRate) : 0;
+
+        workspaceData.push({
+            name: wsName,
+            bounces,
+            sends,
+            bounceRate,
+            pctOfBounces,
+            rateVsAvg
+        });
+    }
+
+    // Sort by bounces descending
+    workspaceData.sort((a, b) => b.bounces - a.bounces);
+
+    for (const ws of workspaceData.slice(0, 20)) {
+        const rateClass = ws.rateVsAvg > 1.5 ? 'danger-cell' :
+                         ws.rateVsAvg > 1.0 ? 'warning-cell' : 'success-cell';
+        const rateLabel = ws.rateVsAvg > 1.5 ? '↑ High' :
+                         ws.rateVsAvg > 1.0 ? '→ Avg' : '↓ Low';
+
         const row = document.createElement('tr');
         row.innerHTML = `
-            <td>${wsName}</td>
-            <td>${formatNumber(count)}</td>
-            <td>${pct}%</td>
+            <td>${ws.name}</td>
+            <td>${formatNumber(ws.bounces)}</td>
+            <td>${formatNumber(ws.sends)}</td>
+            <td>${ws.bounceRate.toFixed(2)}%</td>
+            <td>${ws.pctOfBounces.toFixed(1)}%</td>
+            <td class="${rateClass}">${rateLabel}</td>
         `;
         tbody.appendChild(row);
     }
@@ -1263,22 +1336,82 @@ function updateBounceEventsTable(bounceData) {
     tbody.innerHTML = '';
 
     if (!bounceData.raw || bounceData.raw.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="5" class="no-data">No bounce events found for selected date range.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="no-data">No bounce events found for selected date range.</td></tr>';
         return;
     }
 
-    for (const bounce of bounceData.raw.slice(0, 50)) {
+    // Get limit from selector
+    const limitSelector = document.getElementById('bounceEventsLimit');
+    const limit = limitSelector ? parseInt(limitSelector.value) : 100;
+
+    // Sort by date descending (most recent first)
+    const sortedEvents = [...bounceData.raw].sort((a, b) => {
+        const dateA = a.event_date || a.created_at || '';
+        const dateB = b.event_date || b.created_at || '';
+        return dateB.localeCompare(dateA);
+    });
+
+    for (const bounce of sortedEvents.slice(0, limit)) {
         const date = bounce.event_date || bounce.created_at || '-';
+        const infraClass = getInfraClass(bounce.infra_type || 'Unknown');
+        const messagePreview = bounce.raw_message ?
+            (bounce.raw_message.length > 60 ? bounce.raw_message.substring(0, 60) + '...' : bounce.raw_message) : '-';
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${date}</td>
             <td class="bounce-type-${(bounce.bounce_type || 'unknown').replace(/_/g, '-')}">${formatBounceType(bounce.bounce_type)}</td>
             <td>${bounce.sender_domain || '-'}</td>
+            <td>${bounce.recipient_domain || '-'}</td>
             <td>${bounce.workspace_name || '-'}</td>
-            <td class="${getInfraClass(bounce.infra_type || 'Unknown')}">${bounce.infra_type || '-'}</td>
+            <td class="${infraClass}">${bounce.infra_type || '-'}</td>
+            <td class="message-preview" title="${(bounce.raw_message || '').replace(/"/g, '&quot;')}">${messagePreview}</td>
         `;
         tbody.appendChild(row);
     }
+}
+
+function updateBounceMXProviderTable(bounceData) {
+    const tbody = document.getElementById('bounceMXProviderTableBody');
+    if (!tbody || !bounceData) return;
+    tbody.innerHTML = '';
+
+    const byMXProvider = bounceData.by_mx_provider || {};
+    const total = bounceData.total || 1;
+
+    if (Object.keys(byMXProvider).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="no-data">MX Provider analysis in progress...</td></tr>';
+        return;
+    }
+
+    // Sort by count descending
+    const sorted = Object.entries(byMXProvider).sort((a, b) => b[1] - a[1]);
+
+    for (const [provider, count] of sorted) {
+        const pct = ((count / total) * 100).toFixed(1);
+        const providerClass = getMXProviderClass(provider);
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td class="${providerClass}">${provider}</td>
+            <td>${formatNumber(count)}</td>
+            <td>${pct}%</td>
+        `;
+        tbody.appendChild(row);
+    }
+}
+
+function getMXProviderClass(provider) {
+    const providerClasses = {
+        'Google': 'mx-google',
+        'Microsoft': 'mx-microsoft',
+        'Mimecast': 'mx-mimecast',
+        'Barracuda': 'mx-barracuda',
+        'Proofpoint': 'mx-proofpoint',
+        'Other': 'mx-other',
+        'Unknown': 'mx-unknown'
+    };
+    return providerClasses[provider] || 'mx-other';
 }
 
 async function updateBouncesTab() {
@@ -1295,6 +1428,7 @@ async function updateBouncesTab() {
     updateBounceTypeTable(bounceData);
     updateBounceInfraTable(bounceData);
     updateBounceWorkspaceTable(bounceData);
+    updateBounceMXProviderTable(bounceData);
     updateBounceEventsTable(bounceData);
 }
 
@@ -1702,6 +1836,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         applyBounceDateBtn.addEventListener('click', () => {
             bounceStartDate = bounceStartInput.value;
             bounceEndDate = bounceEndInput.value;
+            updateBouncesTab();
+        });
+    }
+
+    // Bounce events limit selector
+    const bounceEventsLimit = document.getElementById('bounceEventsLimit');
+    if (bounceEventsLimit) {
+        bounceEventsLimit.addEventListener('change', () => {
+            if (currentBounceData) {
+                updateBounceEventsTable(currentBounceData);
+            }
+        });
+    }
+
+    // Refresh bounce events button
+    const refreshBounceEventsBtn = document.getElementById('refreshBounceEvents');
+    if (refreshBounceEventsBtn) {
+        refreshBounceEventsBtn.addEventListener('click', () => {
             updateBouncesTab();
         });
     }
