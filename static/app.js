@@ -275,7 +275,8 @@ function switchSubtab(subtabId) {
 // Show default tabs on load
 function showDefaultTabs() {
     // Show main tab nav
-    document.getElementById('mainTabNav').style.display = 'flex';
+    const mainTabNav = document.getElementById('mainTabNav');
+    if (mainTabNav) mainTabNav.style.display = 'flex';
 
     // Show default main tab (infra)
     switchMainTab('infra');
@@ -1460,10 +1461,12 @@ function setLoading(isLoading) {
         // Reset retry count on successful load
         currentRetryCount = 0;
         // Reset loading message to default
-        loadingEl.innerHTML = `
-            <div class="spinner"></div>
-            <p>Loading data...</p>
-        `;
+        if (loadingEl) {
+            loadingEl.innerHTML = `
+                <div class="spinner"></div>
+                <p>Loading data...</p>
+            `;
+        }
     } else {
         document.querySelectorAll('.main-tab-content').forEach(c => c.style.display = 'none');
 
@@ -1477,12 +1480,14 @@ function setLoading(isLoading) {
 // Show slow loading message with retry option
 function showSlowLoadingMessage() {
     const loadingEl = document.getElementById('loading');
-    loadingEl.innerHTML = `
-        <div class="spinner"></div>
-        <p class="slow-message">Taking longer than expected...</p>
-        <p class="slow-hint">The database might be waking up. This usually takes a few more seconds.</p>
-        <p class="slow-hint">Attempt ${currentRetryCount + 1} of ${MAX_RETRIES}</p>
-    `;
+    if (loadingEl) {
+        loadingEl.innerHTML = `
+            <div class="spinner"></div>
+            <p class="slow-message">Taking longer than expected...</p>
+            <p class="slow-hint">The database might be waking up. This usually takes a few more seconds.</p>
+            <p class="slow-hint">Attempt ${currentRetryCount + 1} of ${MAX_RETRIES}</p>
+        `;
+    }
 }
 
 // Show error state with retry button
