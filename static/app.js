@@ -1,7 +1,7 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v4 (Added charts/trends, client analytics)
+// Version: 2026-02-19-v5 (Fixed bounce dates, separate client date picker)
 
-console.log('[APP VERSION] 2026-02-19-v4 - Charts and client analytics');
+console.log('[APP VERSION] 2026-02-19-v5 - Fixed bounce dates, separate client date picker');
 
 let currentPeriod = '14d';
 let currentData = null;
@@ -21,8 +21,12 @@ let clientDailyPositiveRateChart = null;
 // Main tab and subtab state
 let currentMainTab = 'infra';
 let currentSubtabs = {
-    infra: 'infra-overview'
+    infra: 'infra-overview',
+    clients: 'clients-overview'
 };
+
+// Client tab period
+let clientPeriod = '14d';
 
 // Cached latest snapshot for time-independent tabs
 let latestInfraSnapshot = null;
@@ -34,7 +38,11 @@ let endDate = null;
 // Bounce-specific date state (independent from main dashboard)
 let bounceStartDate = null;
 let bounceEndDate = null;
-const BOUNCE_DATA_START = '2026-02-18'; // First date with webhook bounce data
+const BOUNCE_DATA_START = '2026-02-17'; // First date with webhook bounce data (corrected)
+
+// Client-specific date state (independent from Infra tab)
+let clientStartDate = null;
+let clientEndDate = null;
 
 // Loading timeout and retry configuration
 const LOADING_TIMEOUT_MS = 12000;
@@ -128,7 +136,8 @@ async function fetchData(period, refresh = false) {
 async function fetchBounceData() {
     if (!window.SupabaseClient) return null;
 
-    const end = bounceEndDate || window.SupabaseClient.getLatestDataDate();
+    // Use today's date for bounce end (webhook data is real-time)
+    const end = bounceEndDate || window.SupabaseClient.getTodayDate();
     const start = bounceStartDate || BOUNCE_DATA_START;
 
     console.log(`Fetching bounces from ${start} to ${end}`);
@@ -156,15 +165,20 @@ function switchMainTab(mainTabId) {
         content.style.display = content.id === `main-tab-${mainTabId}` ? 'block' : 'none';
     });
 
-    // Show/hide date picker (only for Infra and Clients)
+    // Show/hide date picker (only for Infra - Clients has its own)
     const datePicker = document.getElementById('datePicker');
     if (datePicker) {
-        datePicker.style.display = (mainTabId === 'infra' || mainTabId === 'clients') ? 'flex' : 'none';
+        datePicker.style.display = mainTabId === 'infra' ? 'flex' : 'none';
     }
 
     // If bounces tab, load bounce data
     if (mainTabId === 'bounces') {
         updateBouncesTab();
+    }
+
+    // If clients tab, load client data with current client date range
+    if (mainTabId === 'clients') {
+        loadClientsData();
     }
 }
 
@@ -990,6 +1004,101 @@ function updateClientDailyTrendsCharts(byDate) {
 }
 
 // ======================
+// Clients Tab Data Loading
+// ======================
+
+let clientsData = null;
+
+async function loadClientsData() {
+    if (!window.SupabaseClient) return;
+
+    const days = PERIOD_DAYS[clientPeriod] || 14;
+    const end = clientEndDate || window.SupabaseClient.getLatestDataDate();
+    const start = clientStartDate || window.SupabaseClient.getDateNDaysAgo(days);
+
+    console.log(`Loading clients data from ${start} to ${end}`);
+
+    try {
+        const data = await window.SupabaseClient.fetchInfraPerformance(start, end);
+        clientsData = data;
+
+        // Update the date range display
+        const displayEl = document.getElementById('clientDateRangeDisplay');
+        if (displayEl) {
+            displayEl.textContent = `${start} → ${end}`;
+        }
+
+        // Update all clients table
+        updateAllClientsTable(data.by_client || {}, data.meta?.days || days);
+
+        // Populate client selector
+        populateClientSelector(data.by_client || {});
+
+        // If a client is already selected, reload their analytics
+        const selector = document.getElementById('clientSelector');
+        if (selector && selector.value) {
+            loadClientAnalytics(selector.value);
+        }
+    } catch (error) {
+        console.error('Error loading clients data:', error);
+    }
+}
+
+function updateAllClientsTable(byClient, numDays) {
+    const tbody = document.getElementById('allClientsTableBody');
+    if (!tbody) return;
+    tbody.innerHTML = '';
+
+    // Aggregate by client (sum all infra types)
+    const clientTotals = {};
+    for (const [clientName, infraData] of Object.entries(byClient || {})) {
+        clientTotals[clientName] = {
+            mailbox_count: 0,
+            domain_count: 0,
+            sent: 0,
+            replied: 0,
+            interested: 0,
+            bounced: 0
+        };
+        for (const m of Object.values(infraData)) {
+            clientTotals[clientName].mailbox_count += m.mailbox_count || 0;
+            clientTotals[clientName].domain_count += m.domain_count || 0;
+            clientTotals[clientName].sent += m.sent || 0;
+            clientTotals[clientName].replied += m.replied || 0;
+            clientTotals[clientName].interested += m.interested || 0;
+            clientTotals[clientName].bounced += m.bounced || 0;
+        }
+    }
+
+    // Sort by sends descending
+    const sorted = Object.entries(clientTotals).sort((a, b) => b[1].sent - a[1].sent);
+
+    for (const [clientName, t] of sorted) {
+        const replyRate = t.sent > 0 ? (t.replied / t.sent) * 100 : 0;
+        const positiveRate = t.sent > 0 ? (t.interested / t.sent) * 100 : 0;
+        const positiveReplyRate = t.replied > 0 ? (t.interested / t.replied) * 100 : 0;
+        const bounceRate = t.sent > 0 ? (t.bounced / t.sent) * 100 : 0;
+        const positivesPerDay = t.interested / numDays;
+
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${clientName}</td>
+            <td>${t.mailbox_count}</td>
+            <td>${t.domain_count}</td>
+            <td>${formatNumber(t.sent)}</td>
+            <td>${formatNumber(t.replied)}</td>
+            <td class="highlight-col">${t.interested}</td>
+            <td>${replyRate.toFixed(2)}%</td>
+            <td class="highlight-col">${positiveRate.toFixed(3)}%</td>
+            <td>${positiveReplyRate.toFixed(2)}%</td>
+            <td>${bounceRate.toFixed(2)}%</td>
+            <td class="highlight-col">${positivesPerDay.toFixed(1)}</td>
+        `;
+        tbody.appendChild(row);
+    }
+}
+
+// ======================
 // Bounce Tab Functions
 // ======================
 
@@ -1442,13 +1551,14 @@ document.addEventListener('DOMContentLoaded', async () => {
     const applyBounceDateBtn = document.getElementById('applyBounceDate');
 
     if (bounceStartInput && bounceEndInput && window.SupabaseClient) {
-        const latestDate = window.SupabaseClient.getLatestDataDate();
-        bounceEndInput.value = latestDate;
+        // Use today's date for bounce end (webhook data is real-time)
+        const todayDate = window.SupabaseClient.getTodayDate();
+        bounceEndInput.value = todayDate;
         bounceStartInput.value = BOUNCE_DATA_START;
         bounceStartInput.min = BOUNCE_DATA_START;
         bounceEndInput.min = BOUNCE_DATA_START;
-        bounceStartInput.max = latestDate;
-        bounceEndInput.max = latestDate;
+        bounceStartInput.max = todayDate;
+        bounceEndInput.max = todayDate;
     }
 
     if (applyBounceDateBtn) {
@@ -1509,6 +1619,67 @@ document.addEventListener('DOMContentLoaded', async () => {
         clientSelector.addEventListener('change', () => {
             const selectedClient = clientSelector.value;
             loadClientAnalytics(selectedClient);
+        });
+    }
+
+    // ======================
+    // Client Date Picker Setup
+    // ======================
+    if (window.SupabaseClient) {
+        const latestDataDate = window.SupabaseClient.getLatestDataDate();
+        const clientStartInput = document.getElementById('clientStartDate');
+        const clientEndInput = document.getElementById('clientEndDate');
+
+        if (clientStartInput && clientEndInput) {
+            clientStartInput.min = DATA_START_DATE;
+            clientEndInput.min = DATA_START_DATE;
+            clientStartInput.max = latestDataDate;
+            clientEndInput.max = latestDataDate;
+            clientEndInput.value = latestDataDate;
+            const defaultStart = new Date(latestDataDate);
+            defaultStart.setDate(defaultStart.getDate() - 13);
+            clientStartInput.value = defaultStart.toISOString().split('T')[0];
+            if (clientStartInput.value < DATA_START_DATE) {
+                clientStartInput.value = DATA_START_DATE;
+            }
+        }
+    }
+
+    // Client period buttons
+    document.querySelectorAll('.client-period-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const period = btn.dataset.period;
+            clientPeriod = period;
+
+            // Update active state
+            document.querySelectorAll('.client-period-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // Reset custom dates
+            clientStartDate = null;
+            clientEndDate = null;
+
+            // Reload client data
+            loadClientsData();
+        });
+    });
+
+    // Client date range apply button
+    const applyClientDateRangeBtn = document.getElementById('applyClientDateRange');
+    if (applyClientDateRangeBtn) {
+        applyClientDateRangeBtn.addEventListener('click', () => {
+            const start = document.getElementById('clientStartDate').value;
+            const end = document.getElementById('clientEndDate').value;
+            if (start && end) {
+                clientStartDate = start;
+                clientEndDate = end;
+
+                // Clear period button active state
+                document.querySelectorAll('.client-period-btn').forEach(b => b.classList.remove('active'));
+
+                // Reload client data
+                loadClientsData();
+            }
         });
     }
 

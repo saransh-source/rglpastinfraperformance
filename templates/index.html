@@ -318,108 +318,161 @@
         <!-- MAIN TAB: CLIENTS -->
         <!-- ========================================== -->
         <div id="main-tab-clients" class="main-tab-content" style="display: none;">
-            <!-- Client Selector -->
-            <div class="client-selector">
-                <label for="clientSelector">Select Client:</label>
-                <select id="clientSelector">
-                    <option value="">-- Select a Client --</option>
-                </select>
+            <!-- Client Date Picker (independent from Infra) -->
+            <div id="clientDatePicker" class="period-selector">
+                <div class="quick-select">
+                    <button class="client-period-btn" data-period="3d">3D</button>
+                    <button class="client-period-btn" data-period="7d">7D</button>
+                    <button class="client-period-btn active" data-period="14d">14D</button>
+                    <button class="client-period-btn" data-period="30d">30D</button>
+                </div>
+                <div class="date-picker">
+                    <label>From:</label>
+                    <input type="date" id="clientStartDate" />
+                    <label>To:</label>
+                    <input type="date" id="clientEndDate" />
+                    <button class="apply-btn" id="applyClientDateRange">Apply</button>
+                </div>
+                <span class="date-range" id="clientDateRangeDisplay"></span>
             </div>
 
-            <!-- Client Overview (shown when client selected) -->
-            <div id="clientOverviewSection" style="display: none;">
-                <h2 id="selectedClientName">Client Overview</h2>
+            <!-- Clients Subtabs -->
+            <div class="subtab-nav">
+                <button class="subtab-btn active" data-subtab="clients-overview">All Clients</button>
+                <button class="subtab-btn" data-subtab="clients-analytics">Client Analytics</button>
+            </div>
 
-                <!-- Client Summary Cards (same format as Infra Overview) -->
-                <div class="overview-cards">
-                    <div class="card">
-                        <div class="card-label">Total Sends</div>
-                        <div class="card-value" id="clientTotalSends">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">Total Replies</div>
-                        <div class="card-value" id="clientTotalReplies">-</div>
-                    </div>
-                    <div class="card highlight">
-                        <div class="card-label">Positive Replies</div>
-                        <div class="card-value" id="clientTotalPositive">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">Reply Rate</div>
-                        <div class="card-value" id="clientReplyRate">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">+ve Rate (Overall)</div>
-                        <div class="card-value" id="clientPositiveRate">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">+ve/Day</div>
-                        <div class="card-value" id="clientPositivesPerDay">-</div>
-                    </div>
-                    <div class="card">
-                        <div class="card-label">Mailboxes</div>
-                        <div class="card-value" id="clientMailboxCount">-</div>
-                    </div>
-                </div>
-
-                <!-- Client Performance Charts -->
-                <div class="charts-section">
-                    <h3>Performance by Infrastructure</h3>
-                    <div class="charts-grid">
-                        <div class="chart-container">
-                            <h4>Sends by Infra Type</h4>
-                            <canvas id="clientInfraSendsChart"></canvas>
-                        </div>
-                        <div class="chart-container">
-                            <h4>Positive Rate by Infra Type</h4>
-                            <canvas id="clientInfraPositiveRateChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Client Daily Trends -->
-                <div class="charts-section">
-                    <h3>Daily Trends</h3>
-                    <div class="charts-grid">
-                        <div class="chart-container">
-                            <h4>Daily Sends & Replies</h4>
-                            <canvas id="clientDailySendsChart"></canvas>
-                        </div>
-                        <div class="chart-container">
-                            <h4>Daily Positive Rate</h4>
-                            <canvas id="clientDailyPositiveRateChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Client Infra Breakdown Table -->
-                <div class="table-section">
-                    <h3>Infrastructure Breakdown</h3>
-                    <div class="table-wrapper">
-                        <table id="clientInfraTable">
-                            <thead>
-                                <tr>
-                                    <th>Infra Type</th>
-                                    <th>Mailboxes</th>
-                                    <th>Domains</th>
-                                    <th>Sends</th>
-                                    <th>Replies</th>
-                                    <th>Interested</th>
-                                    <th>Reply %</th>
-                                    <th>+ve %</th>
-                                    <th>Bounce %</th>
-                                </tr>
-                            </thead>
-                            <tbody id="clientInfraTableBody">
-                            </tbody>
-                        </table>
-                    </div>
+            <!-- SUBTAB: All Clients Overview Table -->
+            <div id="subtab-clients-overview" class="subtab-content">
+                <h2>All Clients Performance</h2>
+                <div class="table-wrapper">
+                    <table id="allClientsTable">
+                        <thead>
+                            <tr>
+                                <th>Client</th>
+                                <th>Mailboxes</th>
+                                <th>Domains</th>
+                                <th>Sends</th>
+                                <th>Replies</th>
+                                <th>Interested</th>
+                                <th>Reply %</th>
+                                <th>+ve %</th>
+                                <th>+ve Reply %</th>
+                                <th>Bounce %</th>
+                                <th>+ve/Day</th>
+                            </tr>
+                        </thead>
+                        <tbody id="allClientsTableBody">
+                        </tbody>
+                    </table>
                 </div>
             </div>
 
-            <!-- No Client Selected Message -->
-            <div id="noClientSelected" class="placeholder-message">
-                <p>Select a client from the dropdown above to view their performance analytics.</p>
+            <!-- SUBTAB: Client Analytics (with selector) -->
+            <div id="subtab-clients-analytics" class="subtab-content" style="display: none;">
+                <!-- Client Selector -->
+                <div class="client-selector">
+                    <label for="clientSelector">Select Client:</label>
+                    <select id="clientSelector">
+                        <option value="">-- Select a Client --</option>
+                    </select>
+                </div>
+
+                <!-- Client Overview (shown when client selected) -->
+                <div id="clientOverviewSection" style="display: none;">
+                    <h2 id="selectedClientName">Client Overview</h2>
+
+                    <!-- Client Summary Cards (same format as Infra Overview) -->
+                    <div class="overview-cards">
+                        <div class="card">
+                            <div class="card-label">Total Sends</div>
+                            <div class="card-value" id="clientTotalSends">-</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-label">Total Replies</div>
+                            <div class="card-value" id="clientTotalReplies">-</div>
+                        </div>
+                        <div class="card highlight">
+                            <div class="card-label">Positive Replies</div>
+                            <div class="card-value" id="clientTotalPositive">-</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-label">Reply Rate</div>
+                            <div class="card-value" id="clientReplyRate">-</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-label">+ve Rate (Overall)</div>
+                            <div class="card-value" id="clientPositiveRate">-</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-label">+ve/Day</div>
+                            <div class="card-value" id="clientPositivesPerDay">-</div>
+                        </div>
+                        <div class="card">
+                            <div class="card-label">Mailboxes</div>
+                            <div class="card-value" id="clientMailboxCount">-</div>
+                        </div>
+                    </div>
+
+                    <!-- Client Performance Charts -->
+                    <div class="charts-section">
+                        <h3>Performance by Infrastructure</h3>
+                        <div class="charts-grid">
+                            <div class="chart-container">
+                                <h4>Sends by Infra Type</h4>
+                                <canvas id="clientInfraSendsChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <h4>Positive Rate by Infra Type</h4>
+                                <canvas id="clientInfraPositiveRateChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Client Daily Trends -->
+                    <div class="charts-section">
+                        <h3>Daily Trends</h3>
+                        <div class="charts-grid">
+                            <div class="chart-container">
+                                <h4>Daily Sends & Replies</h4>
+                                <canvas id="clientDailySendsChart"></canvas>
+                            </div>
+                            <div class="chart-container">
+                                <h4>Daily Positive Rate</h4>
+                                <canvas id="clientDailyPositiveRateChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Client Infra Breakdown Table -->
+                    <div class="table-section">
+                        <h3>Infrastructure Breakdown</h3>
+                        <div class="table-wrapper">
+                            <table id="clientInfraTable">
+                                <thead>
+                                    <tr>
+                                        <th>Infra Type</th>
+                                        <th>Mailboxes</th>
+                                        <th>Domains</th>
+                                        <th>Sends</th>
+                                        <th>Replies</th>
+                                        <th>Interested</th>
+                                        <th>Reply %</th>
+                                        <th>+ve %</th>
+                                        <th>Bounce %</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="clientInfraTableBody">
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- No Client Selected Message -->
+                <div id="noClientSelected" class="placeholder-message">
+                    <p>Select a client from the dropdown above to view their performance analytics.</p>
+                </div>
             </div>
         </div>
 
