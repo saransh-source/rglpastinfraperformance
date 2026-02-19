@@ -1505,12 +1505,15 @@ async function loadData(period, refresh = false) {
     // Retry loop
     while (currentRetryCount < MAX_RETRIES) {
         try {
+            updateLoadingStatus('Fetching data from database...');
             const data = await fetchWithTimeout(() => fetchData(period, refresh), 30000);
             currentData = data;
 
             if (!data.totals) {
                 throw new Error('No data available for this period');
             }
+
+            updateLoadingStatus('Rendering dashboard...');
 
             // Update all sections (time-dependent)
             updateOverview(data.totals, data.meta);
@@ -1624,11 +1627,46 @@ async function loadDataWithDateRange(start, end) {
     }
 }
 
+// Update loading progress message
+function updateLoadingStatus(message) {
+    const loadingEl = document.getElementById('loading');
+    if (loadingEl && loadingEl.querySelector('.spinner')) {
+        loadingEl.innerHTML = `
+            <div class="spinner"></div>
+            <p>${message}</p>
+        `;
+    }
+}
+
 // Event listeners
 document.addEventListener('DOMContentLoaded', async () => {
+    // Check if Supabase client is available
+    if (!window.SupabaseClient) {
+        console.error('SupabaseClient not available - waiting for initialization');
+        let waited = 0;
+        while (!window.SupabaseClient && waited < 5000) {
+            await new Promise(r => setTimeout(r, 100));
+            waited += 100;
+        }
+        if (!window.SupabaseClient) {
+            document.getElementById('loading').innerHTML = `
+                <div class="error">
+                    <p>Failed to initialize database client</p>
+                    <p class="hint">Please refresh the page to try again.</p>
+                    <button class="retry-btn" onclick="location.reload()">Refresh Page</button>
+                </div>
+            `;
+            return;
+        }
+    }
+
+    updateLoadingStatus('Initializing...');
+
     // Load workspace map for bounce tab
-    if (window.SupabaseClient) {
+    try {
         workspaceMap = await window.SupabaseClient.fetchWorkspaces();
+    } catch (e) {
+        console.warn('Failed to load workspace map:', e);
     }
 
     // Set default date values and constraints
