@@ -534,23 +534,6 @@
                         </table>
                     </div>
                 </div>
-
-                <div class="table-section">
-                    <h3>By Infra Type</h3>
-                    <div class="table-wrapper">
-                        <table id="bounceInfraTable">
-                            <thead>
-                                <tr>
-                                    <th>Infra Type</th>
-                                    <th>Count</th>
-                                    <th>Percentage</th>
-                                </tr>
-                            </thead>
-                            <tbody id="bounceInfraTableBody">
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
             </div>
 
             <div class="bounce-tables-section">
@@ -595,6 +578,17 @@
             <div class="table-section">
                 <h3>Recent Bounce Events</h3>
                 <div class="bounce-events-controls">
+                    <label>Filter:</label>
+                    <select id="bounceEventsFilterType">
+                        <option value="all">All Types</option>
+                        <option value="hard_bounce">Hard Bounce</option>
+                        <option value="soft_bounce">Soft Bounce</option>
+                        <option value="block">Block</option>
+                        <option value="complaint">Complaint</option>
+                    </select>
+                    <select id="bounceEventsFilterWorkspace">
+                        <option value="all">All Workspaces</option>
+                    </select>
                     <select id="bounceEventsLimit">
                         <option value="50">50 events</option>
                         <option value="100" selected>100 events</option>

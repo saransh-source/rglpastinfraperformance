@@ -1,7 +1,7 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v11 (Enhanced Bounces Tab - MX/Infra pre-populated in Supabase)
+// Version: 2026-02-19-v12 (Bounce events filtering by type/workspace)
 
-console.log('[APP VERSION] 2026-02-19-v11 - Enhanced Bounces Tab - MX/Infra pre-populated in Supabase');
+console.log('[APP VERSION] 2026-02-19-v12 - Bounce events filtering by type/workspace');
 
 // Bounce type explanations with severity and actions
 const BOUNCE_TYPE_EXPLANATIONS = {
@@ -1340,12 +1340,33 @@ function updateBounceEventsTable(bounceData) {
         return;
     }
 
-    // Get limit from selector
+    // Get filters
+    const typeFilter = document.getElementById('bounceEventsFilterType');
+    const workspaceFilter = document.getElementById('bounceEventsFilterWorkspace');
     const limitSelector = document.getElementById('bounceEventsLimit');
+
+    const filterType = typeFilter ? typeFilter.value : 'all';
+    const filterWorkspace = workspaceFilter ? workspaceFilter.value : 'all';
     const limit = limitSelector ? parseInt(limitSelector.value) : 100;
 
+    // Filter events
+    let filteredEvents = bounceData.raw;
+
+    if (filterType !== 'all') {
+        filteredEvents = filteredEvents.filter(e => e.bounce_type === filterType);
+    }
+
+    if (filterWorkspace !== 'all') {
+        filteredEvents = filteredEvents.filter(e => e.workspace_name === filterWorkspace);
+    }
+
+    if (filteredEvents.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" class="no-data">No events match the selected filters.</td></tr>';
+        return;
+    }
+
     // Sort by date descending (most recent first)
-    const sortedEvents = [...bounceData.raw].sort((a, b) => {
+    const sortedEvents = [...filteredEvents].sort((a, b) => {
         const dateA = a.event_date || a.created_at || '';
         const dateB = b.event_date || b.created_at || '';
         return dateB.localeCompare(dateA);
@@ -1426,10 +1447,34 @@ async function updateBouncesTab() {
     currentBounceData = bounceData;
     updateBounceOverview(bounceData);
     updateBounceTypeTable(bounceData);
-    updateBounceInfraTable(bounceData);
     updateBounceWorkspaceTable(bounceData);
     updateBounceMXProviderTable(bounceData);
+    populateBounceWorkspaceFilter(bounceData);
     updateBounceEventsTable(bounceData);
+}
+
+function populateBounceWorkspaceFilter(bounceData) {
+    const filterSelect = document.getElementById('bounceEventsFilterWorkspace');
+    if (!filterSelect || !bounceData) return;
+
+    // Keep current selection
+    const currentValue = filterSelect.value;
+
+    // Clear and repopulate
+    filterSelect.innerHTML = '<option value="all">All Workspaces</option>';
+
+    const workspaces = Object.keys(bounceData.by_workspace || {}).sort();
+    for (const ws of workspaces) {
+        const option = document.createElement('option');
+        option.value = ws;
+        option.textContent = ws;
+        filterSelect.appendChild(option);
+    }
+
+    // Restore selection if it still exists
+    if (currentValue && filterSelect.querySelector(`option[value="${currentValue}"]`)) {
+        filterSelect.value = currentValue;
+    }
 }
 
 // ======================
@@ -1840,10 +1885,29 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Bounce events limit selector
+    // Bounce events filters and limit selector
     const bounceEventsLimit = document.getElementById('bounceEventsLimit');
+    const bounceEventsFilterType = document.getElementById('bounceEventsFilterType');
+    const bounceEventsFilterWorkspace = document.getElementById('bounceEventsFilterWorkspace');
+
     if (bounceEventsLimit) {
         bounceEventsLimit.addEventListener('change', () => {
+            if (currentBounceData) {
+                updateBounceEventsTable(currentBounceData);
+            }
+        });
+    }
+
+    if (bounceEventsFilterType) {
+        bounceEventsFilterType.addEventListener('change', () => {
+            if (currentBounceData) {
+                updateBounceEventsTable(currentBounceData);
+            }
+        });
+    }
+
+    if (bounceEventsFilterWorkspace) {
+        bounceEventsFilterWorkspace.addEventListener('change', () => {
             if (currentBounceData) {
                 updateBounceEventsTable(currentBounceData);
             }
