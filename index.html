@@ -534,29 +534,26 @@
                         </table>
                     </div>
                 </div>
-            </div>
 
-            <div class="bounce-tables-section">
                 <div class="table-section">
-                    <h3>By Workspace (with Volume Context)</h3>
+                    <h3>By Infra Type</h3>
                     <div class="table-wrapper">
-                        <table id="bounceWorkspaceTable">
+                        <table id="bounceInfraTable">
                             <thead>
                                 <tr>
-                                    <th>Workspace</th>
-                                    <th>Bounces</th>
-                                    <th>Sends</th>
-                                    <th>Bounce Rate</th>
-                                    <th>% Bounces</th>
-                                    <th>Rate vs Avg</th>
+                                    <th>Infra Type</th>
+                                    <th>Count</th>
+                                    <th>Percentage</th>
                                 </tr>
                             </thead>
-                            <tbody id="bounceWorkspaceTableBody">
+                            <tbody id="bounceInfraTableBody">
                             </tbody>
                         </table>
                     </div>
                 </div>
+            </div>
 
+            <div class="bounce-tables-section">
                 <div class="table-section">
                     <h3>By MX Provider (Recipient Server)</h3>
                     <div class="table-wrapper">
@@ -569,6 +566,23 @@
                                 </tr>
                             </thead>
                             <tbody id="bounceMXProviderTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="table-section">
+                    <h3>Top Bouncing Domains</h3>
+                    <div class="table-wrapper">
+                        <table id="bounceTopDomainsTable">
+                            <thead>
+                                <tr>
+                                    <th>Recipient Domain</th>
+                                    <th>Count</th>
+                                    <th>Percentage</th>
+                                </tr>
+                            </thead>
+                            <tbody id="bounceTopDomainsTableBody">
                             </tbody>
                         </table>
                     </div>

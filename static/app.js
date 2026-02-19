@@ -1,7 +1,7 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v12 (Bounce events filtering by type/workspace)
+// Version: 2026-02-19-v13 (Bounces tab restructure - By Type, Infra, MX Provider, Top Domains)
 
-console.log('[APP VERSION] 2026-02-19-v12 - Bounce events filtering by type/workspace');
+console.log('[APP VERSION] 2026-02-19-v13 - Bounces tab restructure with Top Domains');
 
 // Bounce type explanations with severity and actions
 const BOUNCE_TYPE_EXPLANATIONS = {
@@ -1435,6 +1435,42 @@ function getMXProviderClass(provider) {
     return providerClasses[provider] || 'mx-other';
 }
 
+function updateBounceTopDomainsTable(bounceData) {
+    const tbody = document.getElementById('bounceTopDomainsTableBody');
+    if (!tbody || !bounceData) return;
+    tbody.innerHTML = '';
+
+    const total = bounceData.total || 1;
+
+    // Aggregate bounces by recipient domain from raw events
+    const domainCounts = {};
+    if (bounceData.raw && bounceData.raw.length > 0) {
+        for (const event of bounceData.raw) {
+            const domain = event.recipient_domain || 'Unknown';
+            domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+        }
+    }
+
+    if (Object.keys(domainCounts).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="no-data">No domain data available</td></tr>';
+        return;
+    }
+
+    // Sort by count descending and show top 15
+    const sorted = Object.entries(domainCounts).sort((a, b) => b[1] - a[1]).slice(0, 15);
+
+    for (const [domain, count] of sorted) {
+        const pct = ((count / total) * 100).toFixed(1);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${domain}</td>
+            <td>${formatNumber(count)}</td>
+            <td>${pct}%</td>
+        `;
+        tbody.appendChild(row);
+    }
+}
+
 async function updateBouncesTab() {
     console.log('Loading bounce data...');
     const bounceData = await fetchBounceData();
@@ -1447,8 +1483,9 @@ async function updateBouncesTab() {
     currentBounceData = bounceData;
     updateBounceOverview(bounceData);
     updateBounceTypeTable(bounceData);
-    updateBounceWorkspaceTable(bounceData);
+    updateBounceInfraTable(bounceData);
     updateBounceMXProviderTable(bounceData);
+    updateBounceTopDomainsTable(bounceData);
     populateBounceWorkspaceFilter(bounceData);
     updateBounceEventsTable(bounceData);
 }
