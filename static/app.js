@@ -1699,12 +1699,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     updateLoadingStatus('Initializing...');
 
-    // Load workspace map for bounce tab
-    try {
-        workspaceMap = await window.SupabaseClient.fetchWorkspaces();
-    } catch (e) {
-        console.warn('Failed to load workspace map:', e);
-    }
+    // Load workspace map for bounce tab (non-blocking - don't wait if slow)
+    window.SupabaseClient.fetchWorkspaces()
+        .then(map => { workspaceMap = map; })
+        .catch(e => console.warn('Failed to load workspace map:', e));
+
+    updateLoadingStatus('Loading dashboard data...');
 
     // Set default date values and constraints
     if (window.SupabaseClient) {

@@ -824,9 +824,12 @@ async function fetchBounceBreakdown() {
  * Fetch workspaces for mapping
  */
 async function fetchWorkspaces() {
+    // Use a more efficient query - just get one row per workspace from recent data
+    const latestDate = getLatestDataDate();
     const { data, error } = await supabaseClient
         .from('daily_infra_stats')
-        .select('workspace_name');
+        .select('workspace_name')
+        .eq('date', latestDate);
 
     if (error) {
         console.error('Error fetching workspaces:', error);
