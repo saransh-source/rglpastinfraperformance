@@ -293,7 +293,7 @@ def get_all_workspace_clients() -> dict[str, RevGenLabsAPI]:
 
 def _fetch_workspaces_from_supabase() -> dict:
     """
-    Fetch active workspaces from Supabase workspaces table.
+    Fetch active workspaces from Supabase workspace_configs table.
 
     Returns dict of {name: api_token} or empty dict on failure.
     """
@@ -305,7 +305,7 @@ def _fetch_workspaces_from_supabase() -> dict:
     )
 
     try:
-        url = f"{supabase_url}/rest/v1/workspaces?is_active=eq.true&select=name,api_token"
+        url = f"{supabase_url}/rest/v1/workspace_configs?is_active=eq.true&select=name,api_token"
         headers = {
             "apikey": supabase_key,
             "Authorization": f"Bearer {supabase_key}",

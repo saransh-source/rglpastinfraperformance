@@ -1,8 +1,9 @@
--- RGL Infra Dashboard - Workspaces Table
+-- RGL Infra Dashboard - Workspace Configs Table
 -- Run this in Supabase SQL Editor (https://supabase.com/dashboard/project/fxxjfgfnrywffjmxoadl/sql)
 
--- Table: workspaces (Dynamic workspace/client management)
-CREATE TABLE IF NOT EXISTS workspaces (
+-- Table: workspace_configs (Dynamic workspace/client API key management)
+-- Named workspace_configs to avoid conflict with existing 'workspaces' table
+CREATE TABLE IF NOT EXISTS workspace_configs (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL UNIQUE,
     api_token VARCHAR(200) NOT NULL,
@@ -11,10 +12,10 @@ CREATE TABLE IF NOT EXISTS workspaces (
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_workspaces_active ON workspaces(is_active);
+CREATE INDEX IF NOT EXISTS idx_workspace_configs_active ON workspace_configs(is_active);
 
 -- Insert existing workspaces from config.py
-INSERT INTO workspaces (name, api_token, is_active) VALUES
+INSERT INTO workspace_configs (name, api_token, is_active) VALUES
     ('Reev', '70|oN8Dzz23OuBeaNZmxkgWoGFd1uNHxXnwPHxjvIWdce260302', true),
     ('SQA', '92|1kk1GJzDKos99Rw1N90DOnvzj4JP9AZTURjEpM8mcc358f7b', true),
     ('Baton', '29|eVEGpeOSUQ1LJiBVfe5E3Qa9bculFxHhq70UIKzYfc81d9d8', true),
@@ -37,17 +38,16 @@ INSERT INTO workspaces (name, api_token, is_active) VALUES
     ('Onramp', '179|uF36yPIzQGvz4BtEQOg4Zkw6Mrhm3UIHkp03amHKc2fe99a6', true)
 ON CONFLICT (name) DO NOTHING;
 
--- Enable Row Level Security (RLS) - restrict to service role only
-ALTER TABLE workspaces ENABLE ROW LEVEL SECURITY;
+-- Enable Row Level Security (RLS)
+ALTER TABLE workspace_configs ENABLE ROW LEVEL SECURITY;
 
 -- Allow service role full access (used by data collector)
-CREATE POLICY "Service role full access" ON workspaces
+CREATE POLICY "Service role full access" ON workspace_configs
     FOR ALL USING (true) WITH CHECK (true);
 
--- Allow anon role to read active workspaces (name only, not tokens)
--- Dashboard only needs workspace names, not API tokens
-CREATE POLICY "Anon can read workspace names" ON workspaces
+-- Allow anon role to read (dashboard needs workspace names only)
+CREATE POLICY "Anon can read workspace configs" ON workspace_configs
     FOR SELECT USING (true);
 
 -- Verify
-SELECT name, is_active, created_at FROM workspaces ORDER BY name;
+SELECT name, is_active, created_at FROM workspace_configs ORDER BY name;
