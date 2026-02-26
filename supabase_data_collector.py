@@ -27,15 +27,18 @@ SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", SUPABASE_SERVICE_KEY)
 
 
 def get_infra_type_from_tags(tags: list) -> str:
-    """Extract infra type from mailbox tags"""
+    """Extract infra type from mailbox tags.
+
+    Uses TAG_TO_INFRA mapping from config.py.
+    Any tag that has a mapping is accepted (no longer requires
+    presence in TRACKED_INFRA_TYPES for forward compatibility).
+    """
     if not tags:
         return None
     for tag in tags:
         tag_name = tag.get("name", "")
         if tag_name in TAG_TO_INFRA:
-            infra_type = TAG_TO_INFRA[tag_name]
-            if infra_type in TRACKED_INFRA_TYPES:
-                return infra_type
+            return TAG_TO_INFRA[tag_name]
     return None
 
 

@@ -267,14 +267,61 @@ class RevGenLabsAPI:
 
 def get_all_workspace_clients() -> dict[str, RevGenLabsAPI]:
     """
-    Create API clients for all configured workspaces
-    
+    Create API clients for all configured workspaces.
+
+    Tries to fetch from Supabase workspaces table first (dynamic).
+    Falls back to config.py WORKSPACES dict if Supabase fails.
+
     Returns dict of workspace_name -> API client
     """
+    # Try Supabase first for dynamic workspace management
+    supabase_workspaces = _fetch_workspaces_from_supabase()
+    if supabase_workspaces:
+        clients = {}
+        for name, token in supabase_workspaces.items():
+            clients[name] = RevGenLabsAPI(name, token)
+        print(f"[Workspaces] Loaded {len(clients)} active workspaces from Supabase")
+        return clients
+
+    # Fallback to config.py
+    print("[Workspaces] Supabase unavailable, falling back to config.py")
     clients = {}
     for name, token in WORKSPACES.items():
         clients[name] = RevGenLabsAPI(name, token)
     return clients
+
+
+def _fetch_workspaces_from_supabase() -> dict:
+    """
+    Fetch active workspaces from Supabase workspaces table.
+
+    Returns dict of {name: api_token} or empty dict on failure.
+    """
+    import os
+    supabase_url = "https://fxxjfgfnrywffjmxoadl.supabase.co"
+    supabase_key = os.environ.get(
+        "SUPABASE_SERVICE_KEY",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4eGpmZ2Zucnl3ZmZqbXhvYWRsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzYxODgzNSwiZXhwIjoyMDc5MTk0ODM1fQ.HC6BAA1601fSRS2X9Uv53rPD613xxUEcWeODU0kfJLY"
+    )
+
+    try:
+        url = f"{supabase_url}/rest/v1/workspaces?is_active=eq.true&select=name,api_token"
+        headers = {
+            "apikey": supabase_key,
+            "Authorization": f"Bearer {supabase_key}",
+            "Accept": "application/json",
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        if not data:
+            return {}
+
+        return {row["name"]: row["api_token"] for row in data}
+    except Exception as e:
+        print(f"[Workspaces] Failed to fetch from Supabase: {e}")
+        return {}
 
 
 # Quick test

@@ -1,7 +1,7 @@
 // RGL Infra Performance Dashboard - JavaScript
-// Version: 2026-02-19-v13 (Bounces tab restructure - By Type, Infra, MX Provider, Top Domains)
+// Version: 2026-02-26-v14 (Dynamic clients/infra, trend chart fixes, comparison cleanup)
 
-console.log('[APP VERSION] 2026-02-19-v13 - Bounces tab restructure with Top Domains');
+console.log('[APP VERSION] 2026-02-26-v14 - Dynamic infra, trend fix, top 6 comparison');
 
 // Bounce type explanations with severity and actions
 const BOUNCE_TYPE_EXPLANATIONS = {
@@ -130,6 +130,18 @@ const infraColors = {
     'Everwarm': '#84cc16',
     'Unknown': '#6b7280',
 };
+
+// Fallback color generation for new/unknown infra types
+function getInfraColor(infraType) {
+    if (infraColors[infraType]) return infraColors[infraType];
+    // Generate a consistent color from the infra name
+    let hash = 0;
+    for (let i = 0; i < infraType.length; i++) {
+        hash = infraType.charCodeAt(i) + ((hash << 5) - hash);
+    }
+    const hue = Math.abs(hash) % 360;
+    return `hsl(${hue}, 65%, 55%)`;
+}
 
 function getInfraClass(infraType) {
     return 'infra-' + infraType.toLowerCase().replace(/\s+/g, '-');
@@ -299,7 +311,10 @@ function updateInfraTable(byInfra) {
     if (!tbody) return;
     tbody.innerHTML = '';
 
-    const sorted = Object.entries(byInfra).sort((a, b) => b[1].sent - a[1].sent);
+    // Filter out infra types with 0 sends (inactive in this period)
+    const sorted = Object.entries(byInfra)
+        .filter(([_, m]) => (m.sent || 0) > 0 || (m.mailbox_count || 0) > 0)
+        .sort((a, b) => b[1].sent - a[1].sent);
 
     for (const [infraType, m] of sorted) {
         const row = document.createElement('tr');
@@ -641,7 +656,7 @@ function updateInfraCharts(byInfra) {
     const labels = sorted.map(([name]) => name);
     const sends = sorted.map(([_, m]) => m.sent);
     const positiveRates = sorted.map(([_, m]) => m.positive_rate || 0);
-    const colors = labels.map(name => infraColors[name] || '#6b7280');
+    const colors = labels.map(name => getInfraColor(name));
 
     // Sends by Infra Chart
     const sendsCtx = document.getElementById('infraSendsChart');
@@ -799,21 +814,48 @@ async function updateInfraComparisonTrendChart() {
         return;
     }
 
-    const allInfraTypes = Object.keys(infraTrends);
+    // Calculate total sends per infra type to find top 6
+    const infraTotals = {};
+    for (const [infra, dateData] of Object.entries(infraTrends)) {
+        infraTotals[infra] = Object.values(dateData)
+            .reduce((sum, d) => sum + (d.sent || 0), 0);
+    }
+
+    // Get top 6 infra types by volume (keeps chart readable)
+    const top6Infra = Object.entries(infraTotals)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([infra]) => infra);
+
+    console.log('[InfraComparison] Showing top 6 by volume:', top6Infra);
 
     // Get all unique dates across all infra types
     const allDates = new Set();
-    for (const infraType of allInfraTypes) {
-        Object.keys(infraTrends[infraType]).forEach(d => allDates.add(d));
+    for (const infraType of top6Infra) {
+        if (infraTrends[infraType]) {
+            Object.keys(infraTrends[infraType]).forEach(d => allDates.add(d));
+        }
     }
     const sortedDates = [...allDates].sort();
 
-    // Build data per infra type
+    // Build data per infra type (top 6 only)
     const datasets = [];
-    for (const infra of allInfraTypes) {
+    const lineStyles = [
+        { borderWidth: 2.5, borderDash: [] },
+        { borderWidth: 2.5, borderDash: [] },
+        { borderWidth: 2.5, borderDash: [] },
+        { borderWidth: 2, borderDash: [5, 5] },
+        { borderWidth: 2, borderDash: [5, 5] },
+        { borderWidth: 2, borderDash: [8, 3] },
+    ];
+
+    for (let i = 0; i < top6Infra.length; i++) {
+        const infra = top6Infra[i];
+        const style = lineStyles[i] || lineStyles[0];
+
         // Get daily data for this infra
         const infraData = sortedDates.map(date => {
-            const dayStats = infraTrends[infra][date] || { sent: 0, replied: 0, interested: 0 };
+            const dayStats = (infraTrends[infra] || {})[date] || { sent: 0, replied: 0, interested: 0 };
             return {
                 date: date,
                 sent: dayStats.sent || 0,
@@ -824,15 +866,19 @@ async function updateInfraComparisonTrendChart() {
 
         // Aggregate into weekly buckets
         const aggregated = aggregateByPeriod(infraData, 7);
+        const color = getInfraColor(infra);
 
         datasets.push({
             label: infra,
             data: aggregated.map(a => a.positive_rate),
-            borderColor: infraColors[infra] || '#6b7280',
-            backgroundColor: (infraColors[infra] || '#6b7280') + '20',
+            borderColor: color,
+            backgroundColor: color + '20',
             fill: false,
             tension: 0.3,
-            pointRadius: 3
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            borderWidth: style.borderWidth,
+            borderDash: style.borderDash
         });
     }
 
@@ -850,7 +896,26 @@ async function updateInfraComparisonTrendChart() {
                 responsive: true,
                 maintainAspectRatio: false,
                 plugins: {
-                    legend: { position: 'top' }
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            boxWidth: 12,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(3)}%`
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    intersect: false
                 },
                 scales: {
                     y: {
@@ -963,7 +1028,7 @@ function updateClientInfraCharts(byInfra) {
     const labels = sorted.map(([name]) => name);
     const sends = sorted.map(([_, m]) => m.sent);
     const positiveRates = sorted.map(([_, m]) => m.positive_rate || 0);
-    const colors = labels.map(name => infraColors[name] || '#6b7280');
+    const colors = labels.map(name => getInfraColor(name));
 
     // Sends by Infra Chart
     const sendsCtx = document.getElementById('clientInfraSendsChart');

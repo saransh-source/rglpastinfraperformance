@@ -1018,21 +1018,42 @@ async function fetchDailyTrends(days = 14) {
     const latestDate = getLatestDataDate();
     const startDate = getDateNDaysAgo(days);
 
-    const { data, error } = await supabaseClient
-        .from('daily_infra_stats')
-        .select('date, emails_sent, replies, interested, bounces')
-        .gte('date', startDate)
-        .lte('date', latestDate)
-        .order('date', { ascending: true });
+    console.log(`[DailyTrends] Fetching from ${startDate} to ${latestDate} (${days} days)`);
 
-    if (error) {
-        console.error('Error fetching daily trends:', error);
-        return [];
+    // Use pagination to fetch all rows (bypasses 1000-row limit)
+    let allData = [];
+    let offset = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+        const { data, error } = await supabaseClient
+            .from('daily_infra_stats')
+            .select('date, emails_sent, replies, interested, bounces')
+            .gte('date', startDate)
+            .lte('date', latestDate)
+            .order('date', { ascending: true })
+            .range(offset, offset + batchSize - 1);
+
+        if (error) {
+            console.error('Error fetching daily trends:', error);
+            break;
+        }
+
+        if (data && data.length > 0) {
+            allData = allData.concat(data);
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+        } else {
+            hasMore = false;
+        }
     }
+
+    console.log(`[DailyTrends] Fetched ${allData.length} rows`);
 
     // Aggregate by date (sum across all workspaces/infra)
     const byDate = {};
-    for (const row of data) {
+    for (const row of allData) {
         if (!byDate[row.date]) {
             byDate[row.date] = { sent: 0, replied: 0, interested: 0, bounced: 0 };
         }
@@ -1062,21 +1083,42 @@ async function fetchInfraTrends(days = 14) {
     const latestDate = getLatestDataDate();
     const startDate = getDateNDaysAgo(days);
 
-    const { data, error } = await supabaseClient
-        .from('daily_infra_stats')
-        .select('date, infra_type, emails_sent, replies, interested')
-        .gte('date', startDate)
-        .lte('date', latestDate)
-        .order('date', { ascending: true });
+    console.log(`[InfraTrends] Fetching from ${startDate} to ${latestDate} (${days} days)`);
 
-    if (error) {
-        console.error('Error fetching infra trends:', error);
-        return {};
+    // Use pagination to fetch all rows (bypasses 1000-row limit)
+    let allData = [];
+    let offset = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+        const { data, error } = await supabaseClient
+            .from('daily_infra_stats')
+            .select('date, infra_type, emails_sent, replies, interested')
+            .gte('date', startDate)
+            .lte('date', latestDate)
+            .order('date', { ascending: true })
+            .range(offset, offset + batchSize - 1);
+
+        if (error) {
+            console.error('Error fetching infra trends:', error);
+            break;
+        }
+
+        if (data && data.length > 0) {
+            allData = allData.concat(data);
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+        } else {
+            hasMore = false;
+        }
     }
+
+    console.log(`[InfraTrends] Fetched ${allData.length} rows`);
 
     // Group by infra_type -> date -> stats
     const byInfra = {};
-    for (const row of data) {
+    for (const row of allData) {
         const infraType = row.infra_type;
         if (!infraType) continue;
 
@@ -1207,6 +1249,80 @@ async function fetchLatestInfraSnapshot() {
     return await fetchInfraPerformance(latestDate, latestDate);
 }
 
+/**
+ * Fetch active infra types from database based on recent send volume.
+ * Returns only infra types with >= minSends in the last N days.
+ * @param {number} minSends - Minimum sends threshold (default 1000)
+ * @param {number} days - Lookback period in days (default 30)
+ * @returns {Promise<Array>} - Array of active infra type names
+ */
+async function fetchActiveInfraTypes(minSends = 1000, days = 30) {
+    if (!supabaseClient) return TRACKED_INFRA_TYPES; // fallback
+
+    const cutoffDate = getDateNDaysAgo(days);
+    const latestDate = getLatestDataDate();
+
+    const { data, error } = await supabaseClient
+        .from('daily_infra_stats')
+        .select('infra_type, emails_sent')
+        .gte('date', cutoffDate)
+        .lte('date', latestDate);
+
+    if (error || !data) {
+        console.error('Error fetching active infra types:', error);
+        return TRACKED_INFRA_TYPES; // fallback
+    }
+
+    // Aggregate sends by infra type
+    const infraSends = {};
+    for (const row of data) {
+        const infra = row.infra_type;
+        if (infra) {
+            infraSends[infra] = (infraSends[infra] || 0) + (row.emails_sent || 0);
+        }
+    }
+
+    // Filter by minimum sends threshold
+    const active = Object.entries(infraSends)
+        .filter(([_, sends]) => sends >= minSends)
+        .map(([infra]) => infra)
+        .sort();
+
+    console.log(`[ActiveInfra] ${active.length} active infra types (>=${minSends} sends in ${days}d):`, active);
+    return active;
+}
+
+/**
+ * Fetch active clients from database based on recent data.
+ * Returns only clients with data in recent days.
+ * @param {number} days - Lookback period in days (default 30)
+ * @returns {Promise<Array>} - Array of active workspace names
+ */
+async function fetchActiveClients(days = 30) {
+    if (!supabaseClient) return [];
+
+    const cutoffDate = getDateNDaysAgo(days);
+    const latestDate = getLatestDataDate();
+
+    const { data, error } = await supabaseClient
+        .from('daily_infra_stats')
+        .select('workspace_name')
+        .gte('date', cutoffDate)
+        .lte('date', latestDate);
+
+    if (error || !data) {
+        console.error('Error fetching active clients:', error);
+        return [];
+    }
+
+    const clients = [...new Set(data.map(d => d.workspace_name))]
+        .filter(c => c)
+        .sort();
+
+    console.log(`[ActiveClients] ${clients.length} active clients in last ${days}d`);
+    return clients;
+}
+
 // Export functions for use in app.js
 window.SupabaseClient = {
     fetchInfraPerformance,
@@ -1219,6 +1335,8 @@ window.SupabaseClient = {
     fetchInfraTrends,
     fetchClientAnalytics,
     fetchLatestInfraSnapshot,
+    fetchActiveInfraTypes,
+    fetchActiveClients,
     getDateNDaysAgo,
     getLatestDataDate,
     getYesterdayDate,
