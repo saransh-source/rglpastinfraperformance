@@ -7,25 +7,31 @@ Workspace API tokens and infra type mappings
 BASE_URL = "https://mail.revgenlabs.com"
 
 # All workspace tokens (name: "id|token")
+# NOTE: Primary source is now Supabase workspace_configs table.
+# This dict is a fallback only (used if Supabase is unavailable).
 WORKSPACES = {
     "Reev": "70|oN8Dzz23OuBeaNZmxkgWoGFd1uNHxXnwPHxjvIWdce260302",
-    "SQA": "92|1kk1GJzDKos99Rw1N90DOnvzj4JP9AZTURjEpM8mcc358f7b",
     "Baton": "29|eVEGpeOSUQ1LJiBVfe5E3Qa9bculFxHhq70UIKzYfc81d9d8",
+    "Boost": "201|P3SgIm2tn7b4KFr9j1hB5q0pVvxq384nmhrPdzvb9e966e2e",
     "Loop Global": "34|jjKsti7eg9uRNP8et1JF4GzH5nF32lF6TCd5JYADa3816238",
-    "Loop Volta": "154|dryoXqTOmFu8EatT7JF31FeIqy4Gw7fodYKikLwe",
+    "Loop Volta": "154|dryoXqTOmFu8EatT7JF31FeIqy4Gw7fodYKikLwe30265610",
     "Voyageur": "94|GEY5u70fx37I2njkChbrxp1Ng7mOpugHd5BcUGz4cfc2a560",
     "Mobius": "136|u5U0SpOi4k60oTfTOvAfqF06Pg70BKIFi6Xj2XLy23e28d58",
-    "Big Think": "137|BmF6vLkIwq5ulcSfB0h326KNTHM6WzSDecMnbCqs0c6428f1",
+    "Optima": "200|wzhFsw55IOlIkPJI9CU37SFdjLdNKn0VRpBxXWNV7699732b",
     "Kodem": "126|RW8l3aAWlNy0SV31aARsFuDM7YLcm3a2Y2YmMfQoe619ab58",
     "Keep Company": "134|S2Y7bQvN7bIqGQSUwkzHFbj0BVpdj0g7eGJn5t6dffb3127c",
     "Elemental TV": "125|TusTryCjoaxv4mdilfBCIvGEL300clQy9IL5cbUg952e7484",
+    "Raynmaker": "202|rUmin8FxFmaPIFhimuUIg7DRNEpWbQzuyqRun9rQe44cb449",
+    "Records Force": "197|WjMXqmeSXoZ772tdpY26eC1P5ZgMaYxuCq0kPmea62d9ea79",
     "RGL Amir": "106|NSUddH0YLOVJgL44gl9lZ8jSLm1okkiAKQirE59tad4b5f9e",
     "RGL Vera": "145|6Zh6OQhT8aPTuYKIVnntGDQS6u5g3FS0hA93cXS0fcedb8e1",
     "RGL Mitul": "146|bTa2Mg8YRlXpuKtGV87LuQpTY60hTEdMKya9H2DK35afe21b",
     "RGL Kim": "147|YJQW8JWL4Omt5DjBvvMKp4zSgGY8Fmq4zlSe8lxR770eb082",
     "RGL Rahul": "148|I4t7TXTDwLtqasedrH0CXnnAaYCwidPMRvDIAee51a1fb410",
     "RGL Saransh": "149|sylx7dHO3D1oDKSBtM82udP2wZ8sc6AnCjW0RSaNffe2219b",
+    "Robot": "188|kwVOP4NfbtkAxksyA31zjpmy3HC5DtKqIIbyzl9s40a9952b",
     "Select Hub": "172|9lGjZdMKZMMe6ntgIHgleRCQ5BJ0nSZ1lJwkdDp8ee6f8af7",
+    "SQA": "183|uFUaYyD7QInQ90jH9dcDqFD9Mg72f72a9SWZpavj60e645c4",
     "Hey Reach": "173|eei0yQznrWHWMuZxXLtEYnnATU1JEjiN29N3Banha104a49e",
     "Onramp": "179|uF36yPIzQGvz4BtEQOg4Zkw6Mrhm3UIHkp03amHKc2fe99a6",
 }
