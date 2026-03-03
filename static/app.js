@@ -1963,10 +1963,23 @@ async function updateDomainsTab() {
     if (!window.SupabaseClient || domainsLoading) return;
     domainsLoading = true;
 
+    const loadingEl = document.getElementById('domainLoadingMsg');
+    const errorEl = document.getElementById('domainErrorMsg');
+    if (loadingEl) loadingEl.style.display = 'block';
+    if (errorEl) { errorEl.style.display = 'none'; errorEl.textContent = ''; }
+
     try {
         console.log('[Domains] Loading domain health data...');
         domainsDataCache = await window.SupabaseClient.fetchDomainHealthScored();
         console.log('[Domains] Loaded:', domainsDataCache.summary);
+
+        if (!domainsDataCache.all || domainsDataCache.all.length === 0) {
+            console.warn('[Domains] No domain data returned');
+            if (errorEl) {
+                errorEl.textContent = 'No domain data found. Data may still be loading - try refreshing in a minute.';
+                errorEl.style.display = 'block';
+            }
+        }
 
         // Populate filter dropdowns
         populateDomainFilters(domainsDataCache.all);
@@ -1976,8 +1989,13 @@ async function updateDomainsTab() {
         renderDomainTables(domainsDataCache.all);
     } catch (err) {
         console.error('[Domains] Error:', err);
+        if (errorEl) {
+            errorEl.textContent = 'Error loading domain data: ' + err.message;
+            errorEl.style.display = 'block';
+        }
     } finally {
         domainsLoading = false;
+        if (loadingEl) loadingEl.style.display = 'none';
     }
 }
 

@@ -642,6 +642,12 @@
         <div id="main-tab-domains" class="main-tab-content" style="display: none;">
             <h2>Domain Health</h2>
 
+            <!-- Loading / Error indicator -->
+            <div id="domainLoadingMsg" style="display: none; padding: 2rem; text-align: center; color: var(--text-secondary);">
+                Loading domain health data... (this may take a moment)
+            </div>
+            <div id="domainErrorMsg" style="display: none; padding: 1rem; text-align: center; color: var(--accent-red); background: rgba(239,68,68,0.1); border-radius: 8px; margin-bottom: 1rem;"></div>
+
             <!-- Summary Cards -->
             <div class="overview-cards" id="domainSummaryCards">
                 <div class="card" id="domainTotalCard">

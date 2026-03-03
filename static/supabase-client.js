@@ -570,16 +570,23 @@ function aggregateMailboxSnapshots(data) {
  * @returns {Promise<Object>} - Domain performance data
  */
 async function fetchDomainHealth(clientFilter = null) {
-    // Use pagination to get all domain stats (bypasses 1000-row limit)
+    // Fetch domain stats for the last 30 days (reduces data volume significantly)
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+    const dateFilter = thirtyDaysAgo.toISOString().split('T')[0];
+
     let allData = [];
     let offset = 0;
     const batchSize = 1000;
     let hasMore = true;
 
+    console.log(`[DomainHealth] Fetching domain stats since ${dateFilter}...`);
+
     while (hasMore) {
         let query = supabaseClient
             .from('daily_domain_stats')
             .select('*')
+            .gte('date', dateFilter)
             .gt('emails_sent', 0)
             .range(offset, offset + batchSize - 1);
 
@@ -603,7 +610,7 @@ async function fetchDomainHealth(clientFilter = null) {
         }
     }
 
-    console.log(`Fetched ${allData.length} domain health records`);
+    console.log(`[DomainHealth] Fetched ${allData.length} domain health records (last 30 days)`);
     return aggregateDomainHealth(allData);
 }
 
