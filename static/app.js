@@ -48,6 +48,7 @@ let infraPositiveRateChart = null;
 let dailyReplyRateChart = null;
 let dailyPositiveRateChart = null;
 let infraComparisonTrendChart = null;
+let infraReplyRateTrendChart = null;
 let clientInfraSendsChart = null;
 let clientInfraPositiveRateChart = null;
 let clientDailyReplyRateChart = null;
@@ -923,6 +924,75 @@ async function updateInfraComparisonTrendChart() {
                         title: { display: true, text: '+ve Rate %' },
                         ticks: {
                             callback: (v) => v.toFixed(3) + '%'
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    // Reply Rate chart (normal replies / sends)
+    const replyRateDatasets = [];
+    for (let i = 0; i < top6Infra.length; i++) {
+        const infra = top6Infra[i];
+        const style = lineStyles[i] || lineStyles[0];
+        const infraData = sortedDates.map(date => {
+            const dayStats = (infraTrends[infra] || {})[date] || { sent: 0, replied: 0, interested: 0 };
+            return { date, sent: dayStats.sent || 0, replied: dayStats.replied || 0, interested: dayStats.interested || 0 };
+        });
+        const aggregated = aggregateByPeriod(infraData, 7);
+        const color = getInfraColor(infra);
+        replyRateDatasets.push({
+            label: infra,
+            data: aggregated.map(a => a.reply_rate),
+            borderColor: color,
+            backgroundColor: color + '20',
+            fill: false,
+            tension: 0.3,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+            borderWidth: style.borderWidth,
+            borderDash: style.borderDash
+        });
+    }
+
+    const replyCtx = document.getElementById('infraReplyRateTrendChart');
+    if (replyCtx) {
+        infraReplyRateTrendChart = destroyChart(infraReplyRateTrendChart);
+        infraReplyRateTrendChart = new Chart(replyCtx, {
+            type: 'line',
+            data: { labels, datasets: replyRateDatasets },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                        labels: {
+                            usePointStyle: true,
+                            padding: 15,
+                            boxWidth: 12,
+                            font: { size: 11 }
+                        }
+                    },
+                    tooltip: {
+                        mode: 'index',
+                        intersect: false,
+                        callbacks: {
+                            label: (ctx) => `${ctx.dataset.label}: ${ctx.parsed.y.toFixed(2)}%`
+                        }
+                    }
+                },
+                interaction: {
+                    mode: 'nearest',
+                    intersect: false
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: { display: true, text: 'Reply Rate %' },
+                        ticks: {
+                            callback: (v) => v.toFixed(2) + '%'
                         }
                     }
                 }
