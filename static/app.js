@@ -262,6 +262,11 @@ function switchMainTab(mainTabId) {
     if (mainTabId === 'clients') {
         loadClientsData();
     }
+
+    // If domains tab, load domain health data
+    if (mainTabId === 'domains') {
+        updateDomainsTab();
+    }
 }
 
 function switchSubtab(subtabId) {
@@ -2196,6 +2201,241 @@ document.addEventListener('DOMContentLoaded', async () => {
                 loadClientsData();
             }
         });
+    }
+
+    // ====================== Domains Tab ======================
+
+    let domainsDataCache = null;
+    let domainsLoading = false;
+
+    async function updateDomainsTab() {
+        if (!window.SupabaseClient || domainsLoading) return;
+        domainsLoading = true;
+
+        try {
+            console.log('[Domains] Loading domain health data...');
+            domainsDataCache = await window.SupabaseClient.fetchDomainHealthScored();
+            console.log('[Domains] Loaded:', domainsDataCache.summary);
+
+            // Populate filter dropdowns
+            populateDomainFilters(domainsDataCache.all);
+
+            // Render everything
+            renderDomainSummary(domainsDataCache.summary);
+            renderDomainTables(domainsDataCache.all);
+        } catch (err) {
+            console.error('[Domains] Error:', err);
+        } finally {
+            domainsLoading = false;
+        }
+    }
+
+    function populateDomainFilters(domains) {
+        // Workspace filter
+        const wsSelect = document.getElementById('domainFilterWorkspace');
+        const infraSelect = document.getElementById('domainFilterInfra');
+        if (!wsSelect || !infraSelect) return;
+
+        const workspaces = [...new Set(domains.map(d => d.client))].filter(Boolean).sort();
+        const infras = [...new Set(domains.map(d => d.infra_type))].filter(Boolean).sort();
+
+        // Preserve current selections
+        const curWs = wsSelect.value;
+        const curInfra = infraSelect.value;
+
+        wsSelect.innerHTML = '<option value="all">All</option>';
+        for (const ws of workspaces) {
+            wsSelect.innerHTML += `<option value="${ws}">${ws}</option>`;
+        }
+        wsSelect.value = curWs || 'all';
+
+        infraSelect.innerHTML = '<option value="all">All</option>';
+        for (const infra of infras) {
+            infraSelect.innerHTML += `<option value="${infra}">${infra}</option>`;
+        }
+        infraSelect.value = curInfra || 'all';
+
+        // Attach filter change handlers (only once)
+        if (!wsSelect._domainFilterBound) {
+            const rerender = () => renderDomainTables(domainsDataCache ? domainsDataCache.all : []);
+            wsSelect.addEventListener('change', rerender);
+            infraSelect.addEventListener('change', rerender);
+            document.getElementById('domainFilterStatus')?.addEventListener('change', rerender);
+            wsSelect._domainFilterBound = true;
+        }
+    }
+
+    function getFilteredDomains(allDomains) {
+        const wsFilter = document.getElementById('domainFilterWorkspace')?.value || 'all';
+        const infraFilter = document.getElementById('domainFilterInfra')?.value || 'all';
+        const statusFilter = document.getElementById('domainFilterStatus')?.value || 'all';
+
+        return allDomains.filter(d => {
+            if (wsFilter !== 'all' && d.client !== wsFilter) return false;
+            if (infraFilter !== 'all' && d.infra_type !== infraFilter) return false;
+            if (statusFilter !== 'all' && d.status !== statusFilter) return false;
+            return true;
+        });
+    }
+
+    function renderDomainSummary(summary) {
+        const setVal = (id, val) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = val;
+        };
+        setVal('domainTotalCount', summary.total);
+        setVal('domainHealthyCount', summary.healthy);
+        setVal('domainWarningCount', summary.warning);
+        setVal('domainBurnedCount', summary.burned);
+    }
+
+    function renderDomainTables(allDomains) {
+        const filtered = getFilteredDomains(allDomains);
+
+        // Action Required table (burned + warning only)
+        const actionDomains = filtered
+            .filter(d => d.status === 'burned' || d.status === 'warning')
+            .sort((a, b) => {
+                // Burned first, then warning. Within same status, sort by bounce rate desc
+                if (a.status !== b.status) return a.status === 'burned' ? -1 : 1;
+                return b.bounce_rate - a.bounce_rate;
+            });
+
+        const actionBody = document.getElementById('domainActionTableBody');
+        if (actionBody) {
+            if (actionDomains.length === 0) {
+                actionBody.innerHTML = '<tr><td colspan="10" style="text-align:center; color: var(--accent-green);">All domains healthy!</td></tr>';
+            } else {
+                actionBody.innerHTML = actionDomains.map(d => `
+                    <tr>
+                        <td><strong>${d.domain}</strong></td>
+                        <td>${d.mailbox_count}</td>
+                        <td>${d.client}</td>
+                        <td>${d.infra_type}</td>
+                        <td>${d.age_days != null ? d.age_days + 'd' : '-'}</td>
+                        <td>${(d.emails_sent || 0).toLocaleString()}</td>
+                        <td style="color: ${d.reply_rate < 0.5 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
+                        <td style="color: ${d.bounce_rate > 2 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
+                        <td>${statusBadge(d.status)}</td>
+                        <td style="font-size: 0.85em; color: var(--text-secondary)">${d.burn_reason}</td>
+                    </tr>
+                `).join('');
+            }
+        }
+
+        // Hide action section if nothing to show and no filter active
+        const actionSection = document.getElementById('domainActionSection');
+        if (actionSection) {
+            actionSection.style.display = actionDomains.length === 0 &&
+                document.getElementById('domainFilterStatus')?.value === 'all' ? 'none' : 'block';
+            // Always show if there are results or a filter is active
+            if (actionDomains.length > 0) actionSection.style.display = 'block';
+        }
+
+        // All Domains table
+        const allBody = document.getElementById('domainAllTableBody');
+        if (allBody) {
+            const sorted = [...filtered].sort((a, b) => b.bounce_rate - a.bounce_rate);
+            allBody.innerHTML = sorted.map(d => `
+                <tr>
+                    <td><strong>${d.domain}</strong></td>
+                    <td>${d.mailbox_count}</td>
+                    <td>${d.client}</td>
+                    <td>${d.infra_type}</td>
+                    <td>${d.age_days != null ? d.age_days + 'd' : '-'}</td>
+                    <td>${(d.emails_sent || 0).toLocaleString()}</td>
+                    <td>${(d.replies || 0).toLocaleString()}</td>
+                    <td style="color: ${d.reply_rate < 0.5 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
+                    <td style="color: ${d.bounce_rate > 2 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
+                    <td>${d.positive_rate.toFixed(2)}%</td>
+                    <td>${statusBadge(d.status)}</td>
+                </tr>
+            `).join('');
+        }
+
+        // Worst by Infra Type
+        renderWorstByInfra(filtered);
+    }
+
+    function renderWorstByInfra(domains) {
+        const container = document.getElementById('domainWorstByInfraContent');
+        if (!container) return;
+
+        // Group by infra_type
+        const byInfra = {};
+        for (const d of domains) {
+            if (d.emails_sent < 100) continue; // skip low volume
+            if (!byInfra[d.infra_type]) byInfra[d.infra_type] = [];
+            byInfra[d.infra_type].push(d);
+        }
+
+        let html = '';
+        const infraTypes = Object.keys(byInfra).sort();
+
+        for (const infra of infraTypes) {
+            const group = byInfra[infra];
+            if (group.length < 3) continue; // not enough to compare
+
+            // Worst by bounce rate (top 5)
+            const worstBounce = [...group].sort((a, b) => b.bounce_rate - a.bounce_rate).slice(0, 5);
+            // Worst by reply rate (bottom 5)
+            const worstReply = [...group].sort((a, b) => a.reply_rate - b.reply_rate).slice(0, 5);
+
+            html += `
+                <div style="margin-bottom: 1.5rem;">
+                    <h4 style="color: var(--accent-blue); margin-bottom: 0.5rem;">${infra} (${group.length} domains)</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <div>
+                            <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.3rem;">Highest Bounce Rate</p>
+                            <table class="mini-table">
+                                <thead><tr><th>Domain</th><th>Workspace</th><th>Bounce %</th><th>Status</th></tr></thead>
+                                <tbody>
+                                    ${worstBounce.map(d => `
+                                        <tr>
+                                            <td>${d.domain}</td>
+                                            <td>${d.client}</td>
+                                            <td style="color: ${d.bounce_rate > 2 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
+                                            <td>${statusBadge(d.status)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                        <div>
+                            <p style="font-size: 0.85em; color: var(--text-secondary); margin-bottom: 0.3rem;">Lowest Reply Rate</p>
+                            <table class="mini-table">
+                                <thead><tr><th>Domain</th><th>Workspace</th><th>Reply %</th><th>Status</th></tr></thead>
+                                <tbody>
+                                    ${worstReply.map(d => `
+                                        <tr>
+                                            <td>${d.domain}</td>
+                                            <td>${d.client}</td>
+                                            <td style="color: ${d.reply_rate < 0.5 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
+                                            <td>${statusBadge(d.status)}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+
+        container.innerHTML = html || '<p style="color: var(--text-secondary);">Not enough data for infra comparison.</p>';
+    }
+
+    function statusBadge(status) {
+        const styles = {
+            burned: 'background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3)',
+            warning: 'background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3)',
+            healthy: 'background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3)',
+            insufficient: 'background: rgba(107,114,128,0.15); color: #6b7280; border: 1px solid rgba(107,114,128,0.3)',
+        };
+        const labels = { burned: 'Burned', warning: 'Warning', healthy: 'Healthy', insufficient: 'Low Vol' };
+        const style = styles[status] || styles.insufficient;
+        const label = labels[status] || status;
+        return `<span style="${style}; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">${label}</span>`;
     }
 
     // Initial load

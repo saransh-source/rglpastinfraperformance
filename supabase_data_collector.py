@@ -156,6 +156,7 @@ def fetch_all_mailboxes_with_details() -> list:
                     "warmup_enabled": warmup_enabled,
                     "warmup_daily_limit": warmup_daily_limit,
                     "external_id": mb_id,
+                    "created_at": mb.get("created_at"),
                     # These will be updated with time-filtered stats
                     "emails_sent": 0,
                     "replies": 0,
@@ -277,6 +278,14 @@ def aggregate_by_domain(mailboxes: list, stats_by_workspace_infra: dict) -> list
         reply_rate = round(replied / sent * 100, 4) if sent > 0 else 0
         bounce_rate = round(bounced / sent * 100, 4) if sent > 0 else 0
 
+        # Find oldest mailbox created_at for domain age
+        oldest_date = None
+        for mb in group["mailboxes"]:
+            mb_created = mb.get("created_at")
+            if mb_created:
+                if oldest_date is None or mb_created < oldest_date:
+                    oldest_date = mb_created
+
         domain_stats.append({
             "date": today,
             "domain": domain,
@@ -290,6 +299,7 @@ def aggregate_by_domain(mailboxes: list, stats_by_workspace_infra: dict) -> list
             "interested": interested,
             "reply_rate": reply_rate,
             "bounce_rate": bounce_rate,
+            "oldest_mailbox_date": oldest_date,
         })
 
     return domain_stats

@@ -640,10 +640,106 @@
         <!-- MAIN TAB: DOMAINS -->
         <!-- ========================================== -->
         <div id="main-tab-domains" class="main-tab-content" style="display: none;">
-            <div class="placeholder-message">
-                <h2>Domain Health</h2>
-                <p>Coming Soon</p>
-                <p class="hint">Domain health analysis will be available in a future update.</p>
+            <h2>Domain Health</h2>
+
+            <!-- Summary Cards -->
+            <div class="overview-cards" id="domainSummaryCards">
+                <div class="card" id="domainTotalCard">
+                    <div class="card-label">Total Domains</div>
+                    <div class="card-value" id="domainTotalCount">-</div>
+                </div>
+                <div class="card highlight" id="domainHealthyCard">
+                    <div class="card-label">Healthy</div>
+                    <div class="card-value" id="domainHealthyCount">-</div>
+                </div>
+                <div class="card warning" id="domainWarningCard">
+                    <div class="card-label">Warning</div>
+                    <div class="card-value" id="domainWarningCount">-</div>
+                </div>
+                <div class="card danger" id="domainBurnedCard">
+                    <div class="card-label">Burned</div>
+                    <div class="card-value" id="domainBurnedCount">-</div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="filter-row" id="domainFilters">
+                <label>Workspace:
+                    <select id="domainFilterWorkspace">
+                        <option value="all">All</option>
+                    </select>
+                </label>
+                <label>Infra Type:
+                    <select id="domainFilterInfra">
+                        <option value="all">All</option>
+                    </select>
+                </label>
+                <label>Status:
+                    <select id="domainFilterStatus">
+                        <option value="all">All</option>
+                        <option value="burned">Burned</option>
+                        <option value="warning">Warning</option>
+                        <option value="healthy">Healthy</option>
+                        <option value="insufficient">Insufficient Data</option>
+                    </select>
+                </label>
+            </div>
+
+            <!-- Action Required: Burned + Warning -->
+            <div class="table-section" id="domainActionSection">
+                <h3>Action Required</h3>
+                <p class="hint">Domains that may need replacement — sorted by severity.</p>
+                <div class="table-wrapper">
+                    <table id="domainActionTable">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>MBs</th>
+                                <th>Workspace</th>
+                                <th>Infra</th>
+                                <th>Age</th>
+                                <th>Sent</th>
+                                <th>Reply %</th>
+                                <th>Bounce %</th>
+                                <th>Status</th>
+                                <th>Reason</th>
+                            </tr>
+                        </thead>
+                        <tbody id="domainActionTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- All Domains Table -->
+            <div class="table-section">
+                <h3>All Domains</h3>
+                <div class="table-wrapper">
+                    <table id="domainAllTable">
+                        <thead>
+                            <tr>
+                                <th>Domain</th>
+                                <th>MBs</th>
+                                <th>Workspace</th>
+                                <th>Infra</th>
+                                <th>Age</th>
+                                <th>Sent</th>
+                                <th>Replies</th>
+                                <th>Reply %</th>
+                                <th>Bounce %</th>
+                                <th>+ve %</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody id="domainAllTableBody"></tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Worst by Infra Type -->
+            <div class="table-section" id="domainWorstByInfraSection">
+                <h3>Worst Performers by Infra Type</h3>
+                <p class="hint">Bottom 5 domains per infra type by reply rate, and top 5 by bounce rate.</p>
+                <div id="domainWorstByInfraContent"></div>
             </div>
         </div>
 

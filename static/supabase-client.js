@@ -1323,6 +1323,169 @@ async function fetchActiveClients(days = 30) {
     return clients;
 }
 
+// ====================== Domain Health Scoring ======================
+
+/**
+ * Fetch domain health data with health scoring applied.
+ * Combines daily_domain_stats (aggregated) + mailbox_snapshots (for created_at/age).
+ */
+async function fetchDomainHealthScored(clientFilter = null) {
+    // 1. Fetch aggregated domain stats (reuses existing function)
+    const domainData = await fetchDomainHealth(clientFilter);
+    const domains = domainData.all || [];
+
+    // 2. Fetch mailbox-level created_at for domain age
+    const domainAges = await fetchDomainAges();
+
+    // 3. Merge age data into domains
+    for (const d of domains) {
+        const ageKey = `${d.domain}|${d.client}`;
+        const ageInfo = domainAges[ageKey];
+        d.oldest_mailbox_date = ageInfo ? ageInfo.oldest : null;
+        d.age_days = ageInfo ? ageInfo.age_days : null;
+    }
+
+    // 4. Apply health scoring
+    const scored = scoreDomainHealth(domains);
+
+    // 5. Categorize
+    const burned = scored.filter(d => d.status === 'burned');
+    const warning = scored.filter(d => d.status === 'warning');
+    const healthy = scored.filter(d => d.status === 'healthy');
+    const insufficient = scored.filter(d => d.status === 'insufficient');
+
+    return {
+        all: scored,
+        burned: burned.sort((a, b) => b.bounce_rate - a.bounce_rate),
+        warning: warning.sort((a, b) => b.bounce_rate - a.bounce_rate),
+        healthy,
+        insufficient,
+        summary: {
+            total: scored.length,
+            burned: burned.length,
+            warning: warning.length,
+            healthy: healthy.length,
+            insufficient: insufficient.length
+        }
+    };
+}
+
+/**
+ * Fetch oldest mailbox created_at per domain from mailbox_snapshots.
+ * Returns { "domain|workspace": { oldest: "ISO date", age_days: N } }
+ */
+async function fetchDomainAges() {
+    let allData = [];
+    let offset = 0;
+    const batchSize = 1000;
+    let hasMore = true;
+
+    while (hasMore) {
+        const { data, error } = await supabaseClient
+            .from('mailbox_snapshots')
+            .select('domain, workspace_name, created_at')
+            .not('created_at', 'is', null)
+            .range(offset, offset + batchSize - 1);
+
+        if (error) {
+            console.error('Error fetching domain ages:', error);
+            break;
+        }
+        if (data && data.length > 0) {
+            allData = allData.concat(data);
+            offset += batchSize;
+            hasMore = data.length === batchSize;
+        } else {
+            hasMore = false;
+        }
+    }
+
+    // Group by domain|workspace, find oldest created_at
+    const ages = {};
+    const now = new Date();
+    for (const row of allData) {
+        const key = `${row.domain}|${row.workspace_name}`;
+        const created = new Date(row.created_at);
+        if (!ages[key] || created < new Date(ages[key].oldest)) {
+            ages[key] = {
+                oldest: row.created_at,
+                age_days: Math.floor((now - created) / (1000 * 60 * 60 * 24))
+            };
+        }
+    }
+    return ages;
+}
+
+/**
+ * Score domain health based on bounce rate + reply rate thresholds.
+ * Applies absolute thresholds AND relative (per infra group) scoring.
+ */
+function scoreDomainHealth(domains, minSends = 100) {
+    const statusPriority = { burned: 3, warning: 2, healthy: 1, insufficient: 0 };
+    function worstStatus(a, b) {
+        return (statusPriority[a] || 0) >= (statusPriority[b] || 0) ? a : b;
+    }
+
+    // 1. Group by infra_type for relative scoring
+    const byInfra = {};
+    for (const d of domains) {
+        if (!byInfra[d.infra_type]) byInfra[d.infra_type] = [];
+        byInfra[d.infra_type].push(d);
+    }
+
+    // 2. Calculate reply rate percentile thresholds per infra group
+    for (const [infra, group] of Object.entries(byInfra)) {
+        const qualified = group
+            .filter(d => d.emails_sent >= minSends)
+            .sort((a, b) => a.reply_rate - b.reply_rate);
+
+        if (qualified.length < 5) {
+            // Not enough data for meaningful percentiles
+            for (const d of group) { d._infra_p5 = -1; d._infra_p10 = -1; }
+            continue;
+        }
+        const p5idx = Math.floor(qualified.length * 0.05);
+        const p10idx = Math.floor(qualified.length * 0.10);
+        const p5 = qualified[p5idx]?.reply_rate ?? 0;
+        const p10 = qualified[p10idx]?.reply_rate ?? 0;
+        for (const d of group) { d._infra_p5 = p5; d._infra_p10 = p10; }
+    }
+
+    // 3. Score each domain
+    for (const d of domains) {
+        if (d.emails_sent < minSends) {
+            d.status = 'insufficient';
+            d.burn_reason = 'Low volume (<' + minSends + ' sent)';
+            continue;
+        }
+
+        let status = 'healthy';
+        const reasons = [];
+
+        // Bounce rate check (absolute)
+        if (d.bounce_rate > 3) { status = 'burned'; reasons.push('Bounce >' + d.bounce_rate.toFixed(1) + '%'); }
+        else if (d.bounce_rate > 2) { status = worstStatus(status, 'warning'); reasons.push('Bounce >' + d.bounce_rate.toFixed(1) + '%'); }
+
+        // Reply rate check (absolute)
+        if (d.reply_rate < 0.35) { status = 'burned'; reasons.push('Reply ' + d.reply_rate.toFixed(2) + '%'); }
+        else if (d.reply_rate < 0.5) { status = worstStatus(status, 'warning'); reasons.push('Reply ' + d.reply_rate.toFixed(2) + '%'); }
+
+        // Reply rate check (relative within infra group)
+        if (d._infra_p5 >= 0 && d.reply_rate <= d._infra_p5) {
+            status = 'burned';
+            reasons.push('Bottom 5% of ' + d.infra_type);
+        } else if (d._infra_p10 >= 0 && d.reply_rate <= d._infra_p10) {
+            status = worstStatus(status, 'warning');
+            reasons.push('Bottom 10% of ' + d.infra_type);
+        }
+
+        d.status = status;
+        d.burn_reason = reasons.join(', ') || 'Healthy';
+    }
+
+    return domains;
+}
+
 // Export functions for use in app.js
 window.SupabaseClient = {
     fetchInfraPerformance,
@@ -1337,6 +1500,7 @@ window.SupabaseClient = {
     fetchLatestInfraSnapshot,
     fetchActiveInfraTypes,
     fetchActiveClients,
+    fetchDomainHealthScored,
     getDateNDaysAgo,
     getLatestDataDate,
     getYesterdayDate,

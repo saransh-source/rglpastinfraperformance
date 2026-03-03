@@ -1471,3 +1471,18 @@ code {
     color: var(--text-secondary);
     font-weight: 500;
 }
+
+/* Domain Health - mini tables for worst-by-infra */
+.mini-table {
+    width: 100%;
+    font-size: 0.85em;
+}
+
+.mini-table th {
+    padding: 0.4rem 0.6rem;
+    font-size: 0.8em;
+}
+
+.mini-table td {
+    padding: 0.35rem 0.6rem;
+}
