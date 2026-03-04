@@ -639,7 +639,9 @@ function aggregateDomainHealth(data) {
             };
         }
 
-        domainMap[key].mailbox_count += row.mailbox_count || 0;
+        // mailbox_count: use latest (max) value, not sum across days
+        domainMap[key].mailbox_count = Math.max(domainMap[key].mailbox_count, row.mailbox_count || 0);
+        // sends/replies/bounces: sum across days (these are daily increments)
         domainMap[key].emails_sent += row.emails_sent || 0;
         domainMap[key].replies += row.replies || 0;
         domainMap[key].bounces += row.bounces || 0;
