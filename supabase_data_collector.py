@@ -157,11 +157,11 @@ def fetch_all_mailboxes_with_details() -> list:
                     "warmup_daily_limit": warmup_daily_limit,
                     "external_id": mb_id,
                     "created_at": mb.get("created_at"),
-                    # These will be updated with time-filtered stats
-                    "emails_sent": 0,
-                    "replies": 0,
-                    "bounces": 0,
-                    "interested": 0,
+                    # All-time cumulative stats from API
+                    "emails_sent": mb.get("emails_sent_count", 0) or 0,
+                    "replies": mb.get("total_replied_count", 0) or 0,
+                    "bounces": mb.get("bounced_count", 0) or 0,
+                    "interested": mb.get("interested_leads_count", 0) or 0,
                 }
 
                 all_mailboxes.append(mailbox_data)
@@ -380,20 +380,11 @@ def collect_and_store():
     # Step 2: Fetch time-filtered stats (last 30 days for current snapshot)
     stats_by_workspace_infra = fetch_stats_for_mailboxes(mailboxes, days=30)
 
-    # Step 3: Prepare mailbox_snapshots data
+    # Step 3: Store mailbox_snapshots with all-time cumulative stats from API
     print("\n" + "-" * 40)
-    print("Storing mailbox_snapshots...")
+    print("Storing mailbox_snapshots (all-time cumulative stats)...")
 
-    # Update mailboxes with stats (proportionally distributed)
     for mb in mailboxes:
-        ws_stats = stats_by_workspace_infra.get(mb["workspace_name"], {}).get(mb["infra_type"], {})
-        total_mb = ws_stats.get("mailbox_count", 1)
-        ratio = 1 / total_mb if total_mb > 0 else 0
-
-        mb["emails_sent"] = int(ws_stats.get("sent", 0) * ratio)
-        mb["replies"] = int(ws_stats.get("replied", 0) * ratio)
-        mb["bounces"] = int(ws_stats.get("bounced", 0) * ratio)
-        mb["interested"] = int(ws_stats.get("interested", 0) * ratio)
         mb["updated_at"] = datetime.now().isoformat()
 
     result = supabase_upsert("mailbox_snapshots", mailboxes, on_conflict="email")
@@ -676,9 +667,19 @@ def backfill_with_real_daily_data(n_days: int = 14, exclude_recent_days: int = 0
         print(f"(Excluding most recent {exclude_recent_days} days)")
     print("=" * 80)
 
-    # First, fetch mailboxes once
+    # First, fetch mailboxes once (includes all-time cumulative stats from API)
     mailboxes = fetch_all_mailboxes_with_details()
     print(f"\nTotal tracked mailboxes: {len(mailboxes)}")
+
+    # Store mailbox_snapshots with all-time cumulative stats
+    print("\nStoring mailbox_snapshots (all-time cumulative stats)...")
+    snapshot_data = []
+    for mb in mailboxes:
+        snap = mb.copy()
+        snap["updated_at"] = datetime.now().isoformat()
+        snapshot_data.append(snap)
+    result = supabase_upsert("mailbox_snapshots", snapshot_data, on_conflict="email")
+    print(f"  mailbox_snapshots: {result}")
 
     # Fetch REAL daily stats (not cumulative)
     daily_stats = fetch_daily_stats_for_mailboxes(mailboxes, days=n_days)

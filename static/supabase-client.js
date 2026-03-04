@@ -570,19 +570,19 @@ function aggregateMailboxSnapshots(data) {
  * @returns {Promise<Object>} - Domain performance data
  */
 async function fetchDomainHealth(clientFilter = null) {
-    // Fetch ALL domain stats (all-time) for accurate health scoring
+    // Fetch from mailbox_snapshots — contains all-time cumulative stats per mailbox
+    // Then aggregate by domain for domain-level health view
     let allData = [];
     let offset = 0;
     const batchSize = 1000;
     let hasMore = true;
 
-    console.log(`[DomainHealth] Fetching all-time domain stats...`);
+    console.log(`[DomainHealth] Fetching mailbox snapshots (all-time cumulative)...`);
 
     while (hasMore) {
         let query = supabaseClient
-            .from('daily_domain_stats')
-            .select('*')
-            .gt('emails_sent', 0)
+            .from('mailbox_snapshots')
+            .select('email, domain, tld, workspace_name, infra_type, emails_sent, replies, bounces, interested, created_at')
             .range(offset, offset + batchSize - 1);
 
         if (clientFilter && clientFilter !== 'all') {
@@ -592,7 +592,7 @@ async function fetchDomainHealth(clientFilter = null) {
         const { data, error } = await query;
 
         if (error) {
-            console.error('Error fetching domain health at offset', offset, ':', error);
+            console.error('Error fetching mailbox snapshots at offset', offset, ':', error);
             break;
         }
 
@@ -605,12 +605,13 @@ async function fetchDomainHealth(clientFilter = null) {
         }
     }
 
-    console.log(`[DomainHealth] Fetched ${allData.length} domain health records (all-time)`);
+    console.log(`[DomainHealth] Fetched ${allData.length} mailbox records`);
     return aggregateDomainHealth(allData);
 }
 
 /**
- * Aggregate domain-level metrics
+ * Aggregate mailbox-level data to domain-level metrics
+ * Each row is one mailbox — group by domain+workspace and sum stats
  */
 function aggregateDomainHealth(data) {
     const domainMap = {};
@@ -618,6 +619,7 @@ function aggregateDomainHealth(data) {
     for (const row of data) {
         const domain = row.domain;
         const workspace = row.workspace_name;
+        if (!domain) continue;
         const key = `${domain}|${workspace}`;
 
         if (!domainMap[key]) {
@@ -630,50 +632,45 @@ function aggregateDomainHealth(data) {
                 emails_sent: 0,
                 replies: 0,
                 bounces: 0,
-                interested: 0
+                interested: 0,
+                oldest_created_at: null
             };
         }
 
-        // mailbox_count: use latest (max) value, not sum across days
-        domainMap[key].mailbox_count = Math.max(domainMap[key].mailbox_count, row.mailbox_count || 0);
-        // sends/replies/bounces: sum across days (these are daily increments)
+        // Count mailboxes per domain
+        domainMap[key].mailbox_count += 1;
+        // Sum all-time cumulative stats across mailboxes on this domain
         domainMap[key].emails_sent += row.emails_sent || 0;
         domainMap[key].replies += row.replies || 0;
         domainMap[key].bounces += row.bounces || 0;
         domainMap[key].interested += row.interested || 0;
+        // Track oldest mailbox for domain age
+        if (row.created_at) {
+            if (!domainMap[key].oldest_created_at || row.created_at < domainMap[key].oldest_created_at) {
+                domainMap[key].oldest_created_at = row.created_at;
+            }
+        }
     }
 
-    // Calculate rates and convert to array
-    const domains = Object.values(domainMap).map(d => ({
-        ...d,
-        reply_rate: d.emails_sent > 0 ? (d.replies / d.emails_sent) * 100 : 0,
-        bounce_rate: d.emails_sent > 0 ? (d.bounces / d.emails_sent) * 100 : 0,
-        positive_rate: d.emails_sent > 0 ? (d.interested / d.emails_sent) * 100 : 0
-    }));
-
-    // Sort by bounce rate descending for worst domains
-    const worstByBounce = [...domains]
-        .filter(d => d.emails_sent >= 100) // Min 100 sends
-        .sort((a, b) => b.bounce_rate - a.bounce_rate)
-        .slice(0, 50);
-
-    // Sort by reply rate ascending for worst reply rate
-    const worstByReply = [...domains]
-        .filter(d => d.emails_sent >= 100)
-        .sort((a, b) => a.reply_rate - b.reply_rate)
-        .slice(0, 50);
-
-    // Sort by reply rate descending for best domains
-    const bestByReply = [...domains]
-        .filter(d => d.emails_sent >= 100)
-        .sort((a, b) => b.reply_rate - a.reply_rate)
-        .slice(0, 50);
+    // Calculate rates and domain age, convert to array
+    const now = new Date();
+    const domains = Object.values(domainMap).map(d => {
+        let age_days = null;
+        if (d.oldest_created_at) {
+            age_days = Math.floor((now - new Date(d.oldest_created_at)) / (1000 * 60 * 60 * 24));
+        }
+        return {
+            ...d,
+            reply_rate: d.emails_sent > 0 ? (d.replies / d.emails_sent) * 100 : 0,
+            bounce_rate: d.emails_sent > 0 ? (d.bounces / d.emails_sent) * 100 : 0,
+            positive_rate: d.emails_sent > 0 ? (d.interested / d.emails_sent) * 100 : 0,
+            oldest_mailbox_date: d.oldest_created_at,
+            age_days
+        };
+    });
 
     return {
-        all: domains,
-        worst_bounce: worstByBounce,
-        worst_reply: worstByReply,
-        best_reply: bestByReply
+        all: domains
     };
 }
 
@@ -1334,22 +1331,11 @@ async function fetchActiveClients(days = 30) {
  * Combines daily_domain_stats (aggregated) + mailbox_snapshots (for created_at/age).
  */
 async function fetchDomainHealthScored(clientFilter = null) {
-    // 1. Fetch aggregated domain stats (reuses existing function)
+    // 1. Fetch domain stats from mailbox_snapshots (all-time cumulative, includes age)
     const domainData = await fetchDomainHealth(clientFilter);
     const domains = domainData.all || [];
 
-    // 2. Fetch mailbox-level created_at for domain age
-    const domainAges = await fetchDomainAges();
-
-    // 3. Merge age data into domains
-    for (const d of domains) {
-        const ageKey = `${d.domain}|${d.client}`;
-        const ageInfo = domainAges[ageKey];
-        d.oldest_mailbox_date = ageInfo ? ageInfo.oldest : null;
-        d.age_days = ageInfo ? ageInfo.age_days : null;
-    }
-
-    // 4. Apply health scoring
+    // 2. Apply health scoring
     const scored = scoreDomainHealth(domains);
 
     // 5. Categorize
