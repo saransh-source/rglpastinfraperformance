@@ -490,7 +490,7 @@
         <div id="main-tab-bounces" class="main-tab-content" style="display: none;">
             <h2>Bounce Analysis</h2>
 
-            <!-- Independent Bounce Date Picker -->
+            <!-- Bounce Controls: Date + Filters -->
             <div class="bounce-date-controls">
                 <label>Date Range:</label>
                 <input type="date" id="bounceStartDate" />
@@ -499,8 +499,27 @@
                 <button id="applyBounceDate" class="btn-small">Apply</button>
                 <span class="bounce-date-note">Data available from Feb 18, 2026</span>
             </div>
-
-            <p class="section-desc">Data source: <span id="bounceDataSource" class="source-aggregate">bounce_events table</span></p>
+            <div class="filter-row" id="bounceGlobalFilters" style="margin-bottom: 1rem;">
+                <label>Workspace:
+                    <select id="bounceFilterWorkspace">
+                        <option value="all">All Workspaces</option>
+                    </select>
+                </label>
+                <label>Infra Type:
+                    <select id="bounceFilterInfra">
+                        <option value="all">All Infra Types</option>
+                    </select>
+                </label>
+                <label>Bounce Type:
+                    <select id="bounceFilterType">
+                        <option value="all">All Types</option>
+                        <option value="hard_bounce">Hard Bounce</option>
+                        <option value="soft_bounce">Soft Bounce</option>
+                        <option value="block">Block</option>
+                        <option value="complaint">Complaint</option>
+                    </select>
+                </label>
+            </div>
 
             <div class="bounce-overview-cards">
                 <div class="card">
@@ -598,17 +617,7 @@
             <div class="table-section">
                 <h3>Recent Bounce Events</h3>
                 <div class="bounce-events-controls">
-                    <label>Filter:</label>
-                    <select id="bounceEventsFilterType">
-                        <option value="all">All Types</option>
-                        <option value="hard_bounce">Hard Bounce</option>
-                        <option value="soft_bounce">Soft Bounce</option>
-                        <option value="block">Block</option>
-                        <option value="complaint">Complaint</option>
-                    </select>
-                    <select id="bounceEventsFilterWorkspace">
-                        <option value="all">All Workspaces</option>
-                    </select>
+                    <label>Show:</label>
                     <select id="bounceEventsLimit">
                         <option value="50">50 events</option>
                         <option value="100" selected>100 events</option>

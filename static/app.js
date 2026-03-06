@@ -1476,37 +1476,15 @@ function updateBounceEventsTable(bounceData) {
     tbody.innerHTML = '';
 
     if (!bounceData.raw || bounceData.raw.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="no-data">No bounce events found for selected date range.</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="7" class="no-data">No bounce events match the selected filters.</td></tr>';
         return;
     }
 
-    // Get filters
-    const typeFilter = document.getElementById('bounceEventsFilterType');
-    const workspaceFilter = document.getElementById('bounceEventsFilterWorkspace');
     const limitSelector = document.getElementById('bounceEventsLimit');
-
-    const filterType = typeFilter ? typeFilter.value : 'all';
-    const filterWorkspace = workspaceFilter ? workspaceFilter.value : 'all';
     const limit = limitSelector ? parseInt(limitSelector.value) : 100;
 
-    // Filter events
-    let filteredEvents = bounceData.raw;
-
-    if (filterType !== 'all') {
-        filteredEvents = filteredEvents.filter(e => e.bounce_type === filterType);
-    }
-
-    if (filterWorkspace !== 'all') {
-        filteredEvents = filteredEvents.filter(e => e.workspace_name === filterWorkspace);
-    }
-
-    if (filteredEvents.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" class="no-data">No events match the selected filters.</td></tr>';
-        return;
-    }
-
     // Sort by date descending (most recent first)
-    const sortedEvents = [...filteredEvents].sort((a, b) => {
+    const sortedEvents = [...bounceData.raw].sort((a, b) => {
         const dateA = a.event_date || a.created_at || '';
         const dateB = b.event_date || b.created_at || '';
         return dateB.localeCompare(dateA);
@@ -1621,37 +1599,117 @@ async function updateBouncesTab() {
 
     console.log('Bounce data received:', bounceData.total, 'total bounces');
     currentBounceData = bounceData;
-    updateBounceOverview(bounceData);
-    updateBounceTypeTable(bounceData);
-    updateBounceInfraTable(bounceData);
-    updateBounceMXProviderTable(bounceData);
-    updateBounceTopDomainsTable(bounceData);
-    populateBounceWorkspaceFilter(bounceData);
-    updateBounceEventsTable(bounceData);
+
+    // Populate global filter dropdowns from full data
+    populateBounceGlobalFilters(bounceData);
+
+    // Render all sections using filtered data
+    renderBouncesFiltered();
 }
 
-function populateBounceWorkspaceFilter(bounceData) {
-    const filterSelect = document.getElementById('bounceEventsFilterWorkspace');
-    if (!filterSelect || !bounceData) return;
+function populateBounceGlobalFilters(bounceData) {
+    if (!bounceData || !bounceData.raw) return;
 
-    // Keep current selection
-    const currentValue = filterSelect.value;
+    const wsSelect = document.getElementById('bounceFilterWorkspace');
+    const infraSelect = document.getElementById('bounceFilterInfra');
+    if (!wsSelect || !infraSelect) return;
 
-    // Clear and repopulate
-    filterSelect.innerHTML = '<option value="all">All Workspaces</option>';
+    const curWs = wsSelect.value;
+    const curInfra = infraSelect.value;
 
-    const workspaces = Object.keys(bounceData.by_workspace || {}).sort();
+    // Get unique workspaces and infra types from raw data
+    const workspaces = [...new Set(bounceData.raw.map(r => r.workspace_name).filter(Boolean))].sort();
+    const infras = [...new Set(bounceData.raw.map(r => r.infra_type).filter(r => r && r !== '-'))].sort();
+
+    wsSelect.innerHTML = '<option value="all">All Workspaces</option>';
     for (const ws of workspaces) {
-        const option = document.createElement('option');
-        option.value = ws;
-        option.textContent = ws;
-        filterSelect.appendChild(option);
+        wsSelect.innerHTML += `<option value="${ws}">${ws}</option>`;
+    }
+    wsSelect.value = curWs || 'all';
+
+    infraSelect.innerHTML = '<option value="all">All Infra Types</option>';
+    for (const infra of infras) {
+        infraSelect.innerHTML += `<option value="${infra}">${infra}</option>`;
+    }
+    infraSelect.value = curInfra || 'all';
+
+    // Attach change handlers (only once)
+    if (!wsSelect._bounceFilterBound) {
+        const rerender = () => renderBouncesFiltered();
+        wsSelect.addEventListener('change', rerender);
+        infraSelect.addEventListener('change', rerender);
+        document.getElementById('bounceFilterType')?.addEventListener('change', rerender);
+        wsSelect._bounceFilterBound = true;
+    }
+}
+
+function getFilteredBounceData() {
+    if (!currentBounceData || !currentBounceData.raw) return null;
+
+    const wsFilter = document.getElementById('bounceFilterWorkspace')?.value || 'all';
+    const infraFilter = document.getElementById('bounceFilterInfra')?.value || 'all';
+    const typeFilter = document.getElementById('bounceFilterType')?.value || 'all';
+
+    let filtered = currentBounceData.raw;
+
+    if (wsFilter !== 'all') {
+        filtered = filtered.filter(e => e.workspace_name === wsFilter);
+    }
+    if (infraFilter !== 'all') {
+        filtered = filtered.filter(e => e.infra_type === infraFilter);
+    }
+    if (typeFilter !== 'all') {
+        filtered = filtered.filter(e => e.bounce_type === typeFilter);
     }
 
-    // Restore selection if it still exists
-    if (currentValue && filterSelect.querySelector(`option[value="${currentValue}"]`)) {
-        filterSelect.value = currentValue;
+    // Recompute all aggregations from filtered events
+    const byType = {};
+    const byWorkspace = {};
+    const byInfra = {};
+    const byDomain = {};
+    const byMXProvider = {};
+
+    for (const row of filtered) {
+        const type = row.bounce_type || 'unknown';
+        byType[type] = (byType[type] || 0) + 1;
+
+        const ws = row.workspace_name || 'Unknown';
+        byWorkspace[ws] = (byWorkspace[ws] || 0) + 1;
+
+        const infra = row.infra_type || 'Unknown';
+        byInfra[infra] = (byInfra[infra] || 0) + 1;
+
+        const domain = row.sender_domain || 'unknown';
+        byDomain[domain] = (byDomain[domain] || 0) + 1;
+
+        const mx = row.mx_provider || 'Unknown';
+        byMXProvider[mx] = (byMXProvider[mx] || 0) + 1;
     }
+
+    return {
+        total: filtered.length,
+        by_type: byType,
+        by_workspace: byWorkspace,
+        by_infra: byInfra,
+        by_domain: byDomain,
+        by_mx_provider: byMXProvider,
+        workspace_send_volumes: currentBounceData.workspace_send_volumes || {},
+        total_sends: currentBounceData.total_sends || 0,
+        source: currentBounceData.source,
+        raw: filtered
+    };
+}
+
+function renderBouncesFiltered() {
+    const filteredData = getFilteredBounceData();
+    if (!filteredData) return;
+
+    updateBounceOverview(filteredData);
+    updateBounceTypeTable(filteredData);
+    updateBounceInfraTable(filteredData);
+    updateBounceMXProviderTable(filteredData);
+    updateBounceTopDomainsTable(filteredData);
+    updateBounceEventsTable(filteredData);
 }
 
 // ======================
@@ -2024,7 +2082,19 @@ function populateDomainFilters(domains) {
 
     // Attach filter change handlers (only once)
     if (!wsSelect._domainFilterBound) {
-        const rerender = () => renderDomainTables(domainsDataCache ? domainsDataCache.all : []);
+        const rerender = () => {
+            const all = domainsDataCache ? domainsDataCache.all : [];
+            const filtered = getFilteredDomains(all);
+            // Update summary cards based on filtered data
+            const summary = {
+                total: filtered.length,
+                healthy: filtered.filter(d => d.status === 'healthy').length,
+                warning: filtered.filter(d => d.status === 'warning').length,
+                burned: filtered.filter(d => d.status === 'burned').length,
+            };
+            renderDomainSummary(summary);
+            renderDomainTables(all);
+        };
         wsSelect.addEventListener('change', rerender);
         infraSelect.addEventListener('change', rerender);
         document.getElementById('domainFilterStatus')?.addEventListener('change', rerender);
@@ -2308,41 +2378,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // Bounce events filters and limit selector
+    // Bounce events limit selector — re-renders events table only
     const bounceEventsLimit = document.getElementById('bounceEventsLimit');
-    const bounceEventsFilterType = document.getElementById('bounceEventsFilterType');
-    const bounceEventsFilterWorkspace = document.getElementById('bounceEventsFilterWorkspace');
-
     if (bounceEventsLimit) {
-        bounceEventsLimit.addEventListener('change', () => {
-            if (currentBounceData) {
-                updateBounceEventsTable(currentBounceData);
-            }
-        });
+        bounceEventsLimit.addEventListener('change', () => renderBouncesFiltered());
     }
 
-    if (bounceEventsFilterType) {
-        bounceEventsFilterType.addEventListener('change', () => {
-            if (currentBounceData) {
-                updateBounceEventsTable(currentBounceData);
-            }
-        });
-    }
-
-    if (bounceEventsFilterWorkspace) {
-        bounceEventsFilterWorkspace.addEventListener('change', () => {
-            if (currentBounceData) {
-                updateBounceEventsTable(currentBounceData);
-            }
-        });
-    }
-
-    // Refresh bounce events button
+    // Refresh bounce events button — refetches from Supabase
     const refreshBounceEventsBtn = document.getElementById('refreshBounceEvents');
     if (refreshBounceEventsBtn) {
-        refreshBounceEventsBtn.addEventListener('click', () => {
-            updateBouncesTab();
-        });
+        refreshBounceEventsBtn.addEventListener('click', () => updateBouncesTab());
     }
 
     // Refresh button
