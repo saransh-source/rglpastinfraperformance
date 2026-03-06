@@ -722,48 +722,39 @@ async function fetchBounces(startDate, endDate) {
         totalSends += row.emails_sent || 0;
     }
 
-    // Try to fetch from bounce_events table (webhook-collected detailed data)
-    let { data: bounceEvents, error: bounceError } = await supabaseClient
-        .from('bounce_events')
-        .select('*')
-        .gte('event_date', startDate)
-        .lte('event_date', endDate);
+    // Fetch all bounce_events with pagination (Supabase defaults to 1000 row limit)
+    let bounceEvents = [];
+    let bounceError = null;
+    let offset = 0;
+    const batchSize = 1000;
+    let hasMore = true;
 
-    console.log('bounce_events query result:', {
-        count: bounceEvents?.length || 0,
-        error: bounceError?.message || null
-    });
+    console.log(`Fetching bounce_events from ${startDate} to ${endDate}...`);
 
-    // If no data with event_date filter, try without date filter to check if table has data
-    if ((!bounceEvents || bounceEvents.length === 0) && !bounceError) {
-        console.log('No bounce data with date filter, checking table contents...');
-        const { data: allBounces, error: allError } = await supabaseClient
+    while (hasMore) {
+        const { data, error } = await supabaseClient
             .from('bounce_events')
             .select('*')
-            .limit(10);
+            .gte('event_date', startDate)
+            .lte('event_date', endDate)
+            .range(offset, offset + batchSize - 1);
 
-        if (allBounces && allBounces.length > 0) {
-            console.log('Table has data! Sample row:', allBounces[0]);
-            console.log('Available columns:', Object.keys(allBounces[0]));
+        if (error) {
+            console.error('Error fetching bounces at offset', offset, ':', error);
+            bounceError = error;
+            break;
+        }
 
-            // Try fetching all records and filter in JS if date format is the issue
-            const { data: allData } = await supabaseClient
-                .from('bounce_events')
-                .select('*');
-
-            if (allData && allData.length > 0) {
-                console.log(`Fetched all ${allData.length} bounce events, filtering in JS...`);
-                // Filter by date in JavaScript
-                bounceEvents = allData.filter(row => {
-                    const eventDate = (row.event_date || row.created_at || '').split('T')[0];
-                    return eventDate >= startDate && eventDate <= endDate;
-                });
-                console.log(`After date filter: ${bounceEvents.length} events`);
-            }
+        if (data && data.length > 0) {
+            bounceEvents = bounceEvents.concat(data);
+            offset += batchSize;
+            hasMore = data.length === batchSize;
         } else {
-            console.log('bounce_events table is empty or inaccessible:', allError?.message);
+            hasMore = false;
         }
     }
+
+    console.log(`Fetched ${bounceEvents.length} bounce events total`);
 
     // If bounce_events table exists and has data, use it
     if (!bounceError && bounceEvents && bounceEvents.length > 0) {
