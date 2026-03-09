@@ -25,6 +25,11 @@ SUPABASE_URL = "https://fxxjfgfnrywffjmxoadl.supabase.co"
 SUPABASE_SERVICE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZ4eGpmZ2Zucnl3ZmZqbXhvYWRsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzYxODgzNSwiZXhwIjoyMDc5MTk0ODM1fQ.HC6BAA1601fSRS2X9Uv53rPD613xxUEcWeODU0kfJLY"
 SUPABASE_KEY = os.environ.get("SUPABASE_SERVICE_KEY", SUPABASE_SERVICE_KEY)
 
+# Domain health webhook URLs (n8n)
+WEBHOOK_DOMAIN_BURNED = "https://n8n2.revgenlabs.com/webhook/883c981e-2de9-45b2-83e3-79b6e8cc8ca8"
+WEBHOOK_DOMAIN_ALERT = "https://n8n2.revgenlabs.com/webhook/ed72a9fb-9deb-4b9b-a034-303376079b61"
+DOMAIN_HEALTH_MIN_SENDS = 2000
+
 
 def get_infra_type_from_tags(tags: list) -> str:
     """Extract infra type from mailbox tags.
@@ -54,6 +59,94 @@ def extract_tld(domain: str) -> str:
     if not domain or "." not in domain:
         return ""
     return "." + domain.split(".")[-1].lower()
+
+
+def check_domain_health_and_notify(mailboxes: list):
+    """
+    Aggregate mailbox stats by domain, check health thresholds, send webhooks.
+    Called after mailbox_snapshots upsert — uses all-time cumulative stats.
+    """
+    # Aggregate by domain+workspace
+    domain_data = defaultdict(lambda: {
+        "emails_sent": 0, "replies": 0, "bounces": 0,
+        "mailbox_count": 0, "workspace_name": None, "infra_type": None
+    })
+
+    for mb in mailboxes:
+        domain = mb.get("domain", "")
+        workspace = mb.get("workspace_name", "")
+        if not domain:
+            continue
+        key = f"{domain}|{workspace}"
+        d = domain_data[key]
+        d["emails_sent"] += mb.get("emails_sent", 0) or 0
+        d["replies"] += mb.get("replies", 0) or 0
+        d["bounces"] += mb.get("bounces", 0) or 0
+        d["mailbox_count"] += 1
+        if d["workspace_name"] is None:
+            d["workspace_name"] = workspace
+            d["infra_type"] = mb.get("infra_type", "")
+
+    burned_count = 0
+    alert_count = 0
+
+    for key, d in domain_data.items():
+        domain = key.split("|")[0]
+        if d["emails_sent"] < DOMAIN_HEALTH_MIN_SENDS:
+            continue
+
+        bounce_rate = round(d["bounces"] / d["emails_sent"] * 100, 2)
+        reply_rate = round(d["replies"] / d["emails_sent"] * 100, 2)
+
+        alert_type = None
+        reasons = []
+
+        # Burned checks
+        if bounce_rate > 10:
+            alert_type = "burned"
+            reasons.append(f"Retire domain (bounce {bounce_rate}%)")
+        if reply_rate < 0.3:
+            alert_type = "burned"
+            reasons.append(f"Pull infra, likely blocked (reply {reply_rate}%)")
+
+        # Alert checks (only if not already burned)
+        if alert_type != "burned":
+            if 4 < bounce_rate <= 10:
+                alert_type = "alert"
+                reasons.append(f"Stop sends, scrub list (bounce {bounce_rate}%)")
+            if 0.3 <= reply_rate < 0.8:
+                alert_type = "alert"
+                reasons.append(f"Audit sequence & targeting (reply {reply_rate}%)")
+
+        if not alert_type:
+            continue
+
+        webhook_url = WEBHOOK_DOMAIN_BURNED if alert_type == "burned" else WEBHOOK_DOMAIN_ALERT
+        payload = {
+            "domain": domain,
+            "workspace_name": d["workspace_name"],
+            "infra_type": d["infra_type"],
+            "mailbox_count": d["mailbox_count"],
+            "emails_sent": d["emails_sent"],
+            "replies": d["replies"],
+            "bounces": d["bounces"],
+            "reply_rate": reply_rate,
+            "bounce_rate": bounce_rate,
+            "alert_type": alert_type,
+            "reason": ", ".join(reasons),
+        }
+
+        try:
+            resp = requests.post(webhook_url, json=payload, timeout=10)
+            print(f"  Webhook [{alert_type}] {domain}: {resp.status_code}")
+            if alert_type == "burned":
+                burned_count += 1
+            else:
+                alert_count += 1
+        except Exception as e:
+            print(f"  Webhook FAILED for {domain}: {e}")
+
+    print(f"  Domain health alerts: {burned_count} burned, {alert_count} alerts")
 
 
 def supabase_upsert(table: str, data: list, on_conflict: str = None, batch_size: int = 500) -> dict:
@@ -390,6 +483,10 @@ def collect_and_store():
     result = supabase_upsert("mailbox_snapshots", mailboxes, on_conflict="email")
     print(f"  mailbox_snapshots: {result}")
 
+    # Check domain health and send webhook alerts
+    print("\nChecking domain health and sending alerts...")
+    check_domain_health_and_notify(mailboxes)
+
     # Step 4: Aggregate and store daily_infra_stats
     print("\nStoring daily_infra_stats...")
     infra_stats = aggregate_by_infra(mailboxes, stats_by_workspace_infra)
@@ -680,6 +777,10 @@ def backfill_with_real_daily_data(n_days: int = 14, exclude_recent_days: int = 0
         snapshot_data.append(snap)
     result = supabase_upsert("mailbox_snapshots", snapshot_data, on_conflict="email")
     print(f"  mailbox_snapshots: {result}")
+
+    # Check domain health and send webhook alerts
+    print("\nChecking domain health and sending alerts...")
+    check_domain_health_and_notify(mailboxes)
 
     # Fetch REAL daily stats (not cumulative)
     daily_stats = fetch_daily_stats_for_mailboxes(mailboxes, days=n_days)

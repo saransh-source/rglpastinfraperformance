@@ -1329,8 +1329,9 @@ async function fetchDomainHealthScored(clientFilter = null) {
     // 2. Apply health scoring
     const scored = scoreDomainHealth(domains);
 
-    // 5. Categorize
+    // Categorize
     const burned = scored.filter(d => d.status === 'burned');
+    const danger = scored.filter(d => d.status === 'danger');
     const warning = scored.filter(d => d.status === 'warning');
     const healthy = scored.filter(d => d.status === 'healthy');
     const insufficient = scored.filter(d => d.status === 'insufficient');
@@ -1338,12 +1339,14 @@ async function fetchDomainHealthScored(clientFilter = null) {
     return {
         all: scored,
         burned: burned.sort((a, b) => b.bounce_rate - a.bounce_rate),
+        danger: danger.sort((a, b) => b.bounce_rate - a.bounce_rate),
         warning: warning.sort((a, b) => b.bounce_rate - a.bounce_rate),
         healthy,
         insufficient,
         summary: {
             total: scored.length,
             burned: burned.length,
+            danger: danger.length,
             warning: warning.length,
             healthy: healthy.length,
             insufficient: insufficient.length
@@ -1401,38 +1404,12 @@ async function fetchDomainAges() {
  * Score domain health based on bounce rate + reply rate thresholds.
  * Applies absolute thresholds AND relative (per infra group) scoring.
  */
-function scoreDomainHealth(domains, minSends = 100) {
-    const statusPriority = { burned: 3, warning: 2, healthy: 1, insufficient: 0 };
+function scoreDomainHealth(domains, minSends = 2000) {
+    const statusPriority = { burned: 4, danger: 3, warning: 2, healthy: 1, insufficient: 0 };
     function worstStatus(a, b) {
         return (statusPriority[a] || 0) >= (statusPriority[b] || 0) ? a : b;
     }
 
-    // 1. Group by infra_type for relative scoring
-    const byInfra = {};
-    for (const d of domains) {
-        if (!byInfra[d.infra_type]) byInfra[d.infra_type] = [];
-        byInfra[d.infra_type].push(d);
-    }
-
-    // 2. Calculate reply rate percentile thresholds per infra group
-    for (const [infra, group] of Object.entries(byInfra)) {
-        const qualified = group
-            .filter(d => d.emails_sent >= minSends)
-            .sort((a, b) => a.reply_rate - b.reply_rate);
-
-        if (qualified.length < 5) {
-            // Not enough data for meaningful percentiles
-            for (const d of group) { d._infra_p5 = -1; d._infra_p10 = -1; }
-            continue;
-        }
-        const p5idx = Math.floor(qualified.length * 0.05);
-        const p10idx = Math.floor(qualified.length * 0.10);
-        const p5 = qualified[p5idx]?.reply_rate ?? 0;
-        const p10 = qualified[p10idx]?.reply_rate ?? 0;
-        for (const d of group) { d._infra_p5 = p5; d._infra_p10 = p10; }
-    }
-
-    // 3. Score each domain
     for (const d of domains) {
         if (d.emails_sent < minSends) {
             d.status = 'insufficient';
@@ -1443,21 +1420,28 @@ function scoreDomainHealth(domains, minSends = 100) {
         let status = 'healthy';
         const reasons = [];
 
-        // Bounce rate check (absolute)
-        if (d.bounce_rate > 3) { status = 'burned'; reasons.push('Bounce >' + d.bounce_rate.toFixed(1) + '%'); }
-        else if (d.bounce_rate > 2) { status = worstStatus(status, 'warning'); reasons.push('Bounce >' + d.bounce_rate.toFixed(1) + '%'); }
-
-        // Reply rate check (absolute)
-        if (d.reply_rate < 0.35) { status = 'burned'; reasons.push('Reply ' + d.reply_rate.toFixed(2) + '%'); }
-        else if (d.reply_rate < 0.5) { status = worstStatus(status, 'warning'); reasons.push('Reply ' + d.reply_rate.toFixed(2) + '%'); }
-
-        // Reply rate check (relative within infra group)
-        if (d._infra_p5 >= 0 && d.reply_rate <= d._infra_p5) {
+        // Bounce rate thresholds
+        if (d.bounce_rate > 10) {
             status = 'burned';
-            reasons.push('Bottom 5% of ' + d.infra_type);
-        } else if (d._infra_p10 >= 0 && d.reply_rate <= d._infra_p10) {
+            reasons.push('Retire domain (bounce ' + d.bounce_rate.toFixed(1) + '%)');
+        } else if (d.bounce_rate > 4) {
+            status = worstStatus(status, 'danger');
+            reasons.push('Stop sends, scrub (bounce ' + d.bounce_rate.toFixed(1) + '%)');
+        } else if (d.bounce_rate > 2) {
             status = worstStatus(status, 'warning');
-            reasons.push('Bottom 10% of ' + d.infra_type);
+            reasons.push('Scrub list, reduce volume (bounce ' + d.bounce_rate.toFixed(1) + '%)');
+        }
+
+        // Reply rate thresholds
+        if (d.reply_rate < 0.3) {
+            status = 'burned';
+            reasons.push('Pull infra, likely blocked (reply ' + d.reply_rate.toFixed(2) + '%)');
+        } else if (d.reply_rate < 0.8) {
+            status = worstStatus(status, 'danger');
+            reasons.push('Audit sequence & targeting (reply ' + d.reply_rate.toFixed(2) + '%)');
+        } else if (d.reply_rate < 1.5) {
+            status = worstStatus(status, 'warning');
+            reasons.push('Monitor closely (reply ' + d.reply_rate.toFixed(2) + '%)');
         }
 
         d.status = status;

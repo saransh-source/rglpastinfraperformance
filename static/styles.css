@@ -802,6 +802,15 @@ footer {
     color: var(--accent-yellow);
 }
 
+.card.caution {
+    border-color: #f97316;
+    background: linear-gradient(135deg, var(--bg-secondary), rgba(249, 115, 22, 0.1));
+}
+
+.card.caution .card-value {
+    color: #f97316;
+}
+
 .bounce-breakdown-section {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));

@@ -2090,6 +2090,7 @@ function populateDomainFilters(domains) {
                 total: filtered.length,
                 healthy: filtered.filter(d => d.status === 'healthy').length,
                 warning: filtered.filter(d => d.status === 'warning').length,
+                danger: filtered.filter(d => d.status === 'danger').length,
                 burned: filtered.filter(d => d.status === 'burned').length,
             };
             renderDomainSummary(summary);
@@ -2123,17 +2124,19 @@ function renderDomainSummary(summary) {
     setVal('domainTotalCount', summary.total);
     setVal('domainHealthyCount', summary.healthy);
     setVal('domainWarningCount', summary.warning);
+    setVal('domainDangerCount', summary.danger);
     setVal('domainBurnedCount', summary.burned);
 }
 
 function renderDomainTables(allDomains) {
     const filtered = getFilteredDomains(allDomains);
 
-    // Action Required table (burned + warning only)
+    // Action Required table (burned + danger + warning)
     const actionDomains = filtered
-        .filter(d => d.status === 'burned' || d.status === 'warning')
+        .filter(d => d.status === 'burned' || d.status === 'danger' || d.status === 'warning')
         .sort((a, b) => {
-            if (a.status !== b.status) return a.status === 'burned' ? -1 : 1;
+            const p = { burned: 3, danger: 2, warning: 1 };
+            if (a.status !== b.status) return (p[b.status] || 0) - (p[a.status] || 0);
             return b.bounce_rate - a.bounce_rate;
         });
 
@@ -2150,8 +2153,8 @@ function renderDomainTables(allDomains) {
                     <td>${d.infra_type}</td>
                     <td>${d.age_days != null ? d.age_days + 'd' : '-'}</td>
                     <td>${(d.emails_sent || 0).toLocaleString()}</td>
-                    <td style="color: ${d.reply_rate < 0.5 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
-                    <td style="color: ${d.bounce_rate > 2 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
+                    <td style="color: ${d.reply_rate < 0.8 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
+                    <td style="color: ${d.bounce_rate > 4 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
                     <td>${statusBadge(d.status)}</td>
                     <td style="font-size: 0.85em; color: var(--text-secondary)">${d.burn_reason}</td>
                 </tr>
@@ -2180,8 +2183,8 @@ function renderDomainTables(allDomains) {
                 <td>${d.age_days != null ? d.age_days + 'd' : '-'}</td>
                 <td>${(d.emails_sent || 0).toLocaleString()}</td>
                 <td>${(d.replies || 0).toLocaleString()}</td>
-                <td style="color: ${d.reply_rate < 0.5 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
-                <td style="color: ${d.bounce_rate > 2 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
+                <td style="color: ${d.reply_rate < 0.8 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
+                <td style="color: ${d.bounce_rate > 4 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
                 <td>${d.positive_rate.toFixed(2)}%</td>
                 <td>${statusBadge(d.status)}</td>
             </tr>
@@ -2198,7 +2201,7 @@ function renderWorstByInfra(domains) {
 
     const byInfra = {};
     for (const d of domains) {
-        if (d.emails_sent < 100) continue;
+        if (d.emails_sent < 2000) continue;
         if (!byInfra[d.infra_type]) byInfra[d.infra_type] = [];
         byInfra[d.infra_type].push(d);
     }
@@ -2226,7 +2229,7 @@ function renderWorstByInfra(domains) {
                                     <tr>
                                         <td>${d.domain}</td>
                                         <td>${d.client}</td>
-                                        <td style="color: ${d.bounce_rate > 2 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
+                                        <td style="color: ${d.bounce_rate > 4 ? 'var(--accent-red)' : 'inherit'}">${d.bounce_rate.toFixed(2)}%</td>
                                         <td>${statusBadge(d.status)}</td>
                                     </tr>
                                 `).join('')}
@@ -2242,7 +2245,7 @@ function renderWorstByInfra(domains) {
                                     <tr>
                                         <td>${d.domain}</td>
                                         <td>${d.client}</td>
-                                        <td style="color: ${d.reply_rate < 0.5 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
+                                        <td style="color: ${d.reply_rate < 0.8 ? 'var(--accent-red)' : 'inherit'}">${d.reply_rate.toFixed(2)}%</td>
                                         <td>${statusBadge(d.status)}</td>
                                     </tr>
                                 `).join('')}
@@ -2260,11 +2263,12 @@ function renderWorstByInfra(domains) {
 function statusBadge(status) {
     const styles = {
         burned: 'background: rgba(239,68,68,0.15); color: #ef4444; border: 1px solid rgba(239,68,68,0.3)',
+        danger: 'background: rgba(249,115,22,0.15); color: #f97316; border: 1px solid rgba(249,115,22,0.3)',
         warning: 'background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3)',
         healthy: 'background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3)',
         insufficient: 'background: rgba(107,114,128,0.15); color: #6b7280; border: 1px solid rgba(107,114,128,0.3)',
     };
-    const labels = { burned: 'Burned', warning: 'Warning', healthy: 'Healthy', insufficient: 'Low Vol' };
+    const labels = { burned: 'Burned', danger: 'Danger', warning: 'Warning', healthy: 'Healthy', insufficient: 'Low Vol' };
     const style = styles[status] || styles.insufficient;
     const label = labels[status] || status;
     return `<span style="${style}; padding: 2px 8px; border-radius: 12px; font-size: 0.8em; font-weight: 600;">${label}</span>`;
