@@ -11,6 +11,7 @@ Reuses existing analyzer.py logic for API fetching and aggregation.
 """
 
 import os
+import time
 import requests
 from datetime import datetime, timedelta
 from collections import defaultdict
@@ -145,6 +146,10 @@ def check_domain_health_and_notify(mailboxes: list):
                 alert_count += 1
         except Exception as e:
             print(f"  Webhook FAILED for {domain}: {e}")
+
+        # Throttle: 30-second delay between webhooks so n8n can process each one
+        print(f"  Waiting 30s before next webhook...")
+        time.sleep(30)
 
     print(f"  Domain health alerts: {burned_count} burned, {alert_count} alerts")
 
