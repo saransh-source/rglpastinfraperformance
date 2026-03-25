@@ -147,9 +147,8 @@ def check_domain_health_and_notify(mailboxes: list):
         except Exception as e:
             print(f"  Webhook FAILED for {domain}: {e}")
 
-        # Throttle: 30-second delay between webhooks so n8n can process each one
-        print(f"  Waiting 30s before next webhook...")
-        time.sleep(30)
+        # Throttle: 5-second delay between webhooks so n8n can process each one
+        time.sleep(5)
 
     print(f"  Domain health alerts: {burned_count} burned, {alert_count} alerts")
 
@@ -479,18 +478,21 @@ def collect_and_store():
     stats_by_workspace_infra = fetch_stats_for_mailboxes(mailboxes, days=30)
 
     # Step 3: Store mailbox_snapshots with all-time cumulative stats from API
+    # Deduplicate by email — same email can appear in multiple workspaces
     print("\n" + "-" * 40)
     print("Storing mailbox_snapshots (all-time cumulative stats)...")
 
+    snapshot_map = {}
     for mb in mailboxes:
         mb["updated_at"] = datetime.now().isoformat()
+        email = mb.get("email", "")
+        if email not in snapshot_map or (mb.get("emails_sent", 0) or 0) > (snapshot_map[email].get("emails_sent", 0) or 0):
+            snapshot_map[email] = mb
+    snapshot_data = list(snapshot_map.values())
+    print(f"  Deduped {len(mailboxes)} -> {len(snapshot_data)} unique emails")
 
-    result = supabase_upsert("mailbox_snapshots", mailboxes, on_conflict="email")
+    result = supabase_upsert("mailbox_snapshots", snapshot_data, on_conflict="email")
     print(f"  mailbox_snapshots: {result}")
-
-    # Check domain health and send webhook alerts
-    print("\nChecking domain health and sending alerts...")
-    check_domain_health_and_notify(mailboxes)
 
     # Step 4: Aggregate and store daily_infra_stats
     print("\nStoring daily_infra_stats...")
@@ -520,6 +522,10 @@ def collect_and_store():
     domain_stats = list(domain_key_map.values())
     result = supabase_upsert("daily_domain_stats", domain_stats, on_conflict="date,domain,workspace_name")
     print(f"  daily_domain_stats: {result}")
+
+    # Check domain health and send webhook alerts AFTER all data is stored
+    print("\nChecking domain health and sending alerts...")
+    check_domain_health_and_notify(mailboxes)
 
     # Summary
     print("\n" + "=" * 80)
@@ -774,20 +780,22 @@ def backfill_with_real_daily_data(n_days: int = 14, exclude_recent_days: int = 0
     print(f"\nTotal tracked mailboxes: {len(mailboxes)}")
 
     # Store mailbox_snapshots with all-time cumulative stats
+    # Deduplicate by email — same email can appear in multiple workspaces
     print("\nStoring mailbox_snapshots (all-time cumulative stats)...")
-    snapshot_data = []
+    snapshot_map = {}
     for mb in mailboxes:
         snap = mb.copy()
         snap["updated_at"] = datetime.now().isoformat()
-        snapshot_data.append(snap)
+        # Keep the last occurrence (or the one with more sends)
+        email = snap.get("email", "")
+        if email not in snapshot_map or (snap.get("emails_sent", 0) or 0) > (snapshot_map[email].get("emails_sent", 0) or 0):
+            snapshot_map[email] = snap
+    snapshot_data = list(snapshot_map.values())
+    print(f"  Deduped {len(mailboxes)} -> {len(snapshot_data)} unique emails")
     result = supabase_upsert("mailbox_snapshots", snapshot_data, on_conflict="email")
     print(f"  mailbox_snapshots: {result}")
 
-    # Check domain health and send webhook alerts
-    print("\nChecking domain health and sending alerts...")
-    check_domain_health_and_notify(mailboxes)
-
-    # Fetch REAL daily stats (not cumulative)
+    # Fetch REAL daily stats (not cumulative) — do this BEFORE webhooks so data is stored even if job times out
     daily_stats = fetch_daily_stats_for_mailboxes(mailboxes, days=n_days)
 
     # Group mailboxes by workspace + infra for counts
@@ -914,6 +922,10 @@ def backfill_with_real_daily_data(n_days: int = 14, exclude_recent_days: int = 0
         deduplicated_domain_stats = list(domain_key_map.values())
         result = supabase_upsert("daily_domain_stats", deduplicated_domain_stats, on_conflict="date,domain,workspace_name")
         print(f"  daily_domain_stats: {result}")
+
+    # Check domain health and send webhook alerts AFTER all data is stored
+    print("\nChecking domain health and sending alerts...")
+    check_domain_health_and_notify(mailboxes)
 
     print("\n" + "=" * 80)
     print(f"Backfill Complete! Created {len(all_dates)} days of REAL historical data.")
