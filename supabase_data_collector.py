@@ -31,6 +31,12 @@ WEBHOOK_DOMAIN_BURNED = "https://n8n2.revgenlabs.com/webhook/883c981e-2de9-45b2-
 WEBHOOK_DOMAIN_ALERT = "https://n8n2.revgenlabs.com/webhook/ed72a9fb-9deb-4b9b-a034-303376079b61"
 DOMAIN_HEALTH_MIN_SENDS = 2000
 
+# Webhook safeguards — prevent cascading volume drops
+ALERT_COOLDOWN_DAYS = 14       # Don't re-alert a domain for 14 days after firing
+WORKSPACE_CAP_PERCENT = 0.20   # Max 20% of a workspace's domains alerted per run
+WORKSPACE_CAP_MIN = 5          # Always allow at least 5 alerts per workspace
+WORKSPACE_CAP_MAX = 30         # Never more than 30 per workspace per run
+
 
 def get_infra_type_from_tags(tags: list) -> str:
     """Extract infra type from mailbox tags.
@@ -62,12 +68,57 @@ def extract_tld(domain: str) -> str:
     return "." + domain.split(".")[-1].lower()
 
 
+def _fetch_recently_alerted() -> set:
+    """Fetch domains alerted within the cooldown period from Supabase."""
+    cutoff = (datetime.now() - timedelta(days=ALERT_COOLDOWN_DAYS)).isoformat()
+    url = (f"{SUPABASE_URL}/rest/v1/domain_alerts"
+           f"?alerted_at=gte.{cutoff}&select=domain,workspace_name")
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Accept": "application/json",
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+        return {(r["domain"], r["workspace_name"]) for r in data}
+    except Exception as e:
+        print(f"  Warning: could not fetch domain_alerts cooldown: {e}")
+        return set()
+
+
+def _record_alert(domain: str, workspace_name: str, alert_type: str,
+                  reason: str, bounce_rate: float, reply_rate: float):
+    """Upsert a fired alert into domain_alerts for cooldown tracking."""
+    url = f"{SUPABASE_URL}/rest/v1/domain_alerts?on_conflict=domain,workspace_name"
+    headers = {
+        "apikey": SUPABASE_KEY,
+        "Authorization": f"Bearer {SUPABASE_KEY}",
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates",
+    }
+    payload = {
+        "domain": domain,
+        "workspace_name": workspace_name,
+        "alert_type": alert_type,
+        "reason": reason,
+        "bounce_rate": bounce_rate,
+        "reply_rate": reply_rate,
+        "alerted_at": datetime.now().isoformat(),
+    }
+    try:
+        requests.post(url, json=payload, headers=headers, timeout=10)
+    except Exception as e:
+        print(f"  Warning: could not record alert for {domain}: {e}")
+
+
 def check_domain_health_and_notify(mailboxes: list):
     """
     Aggregate mailbox stats by domain, check health thresholds, send webhooks.
-    Called after mailbox_snapshots upsert — uses all-time cumulative stats.
+    Includes 14-day cooldown and per-workspace cap to prevent cascading volume drops.
     """
-    # Aggregate by domain+workspace
+    # --- Aggregate by domain+workspace ---
     domain_data = defaultdict(lambda: {
         "emails_sent": 0, "replies": 0, "bounces": 0,
         "mailbox_count": 0, "workspace_name": None, "infra_type": None
@@ -88,11 +139,24 @@ def check_domain_health_and_notify(mailboxes: list):
             d["workspace_name"] = workspace
             d["infra_type"] = mb.get("infra_type", "")
 
-    burned_count = 0
-    alert_count = 0
+    # --- Count total domains per workspace (for cap calculation) ---
+    workspace_domain_counts = defaultdict(int)
+    for key, d in domain_data.items():
+        if d["emails_sent"] >= DOMAIN_HEALTH_MIN_SENDS:
+            workspace_domain_counts[d["workspace_name"]] += 1
+
+    # --- Fetch cooldown set ---
+    recently_alerted = _fetch_recently_alerted()
+    print(f"  {len(recently_alerted)} domains in cooldown (alerted within {ALERT_COOLDOWN_DAYS} days)")
+
+    # --- Pass 1: Score all flagged domains (no webhooks yet) ---
+    workspace_alerts = defaultdict(list)  # workspace -> list of alert dicts
+    total_flagged = 0
 
     for key, d in domain_data.items():
         domain = key.split("|")[0]
+        workspace = d["workspace_name"]
+
         if d["emails_sent"] < DOMAIN_HEALTH_MIN_SENDS:
             continue
 
@@ -115,17 +179,25 @@ def check_domain_health_and_notify(mailboxes: list):
             if 4 < bounce_rate <= 10:
                 alert_type = "alert"
                 reasons.append(f"Stop sends, scrub list (bounce {bounce_rate}%)")
-            if 0.3 <= reply_rate < 0.8:
+            if 0.3 <= reply_rate < 0.6:
                 alert_type = "alert"
                 reasons.append(f"Audit sequence & targeting (reply {reply_rate}%)")
 
         if not alert_type:
             continue
 
-        webhook_url = WEBHOOK_DOMAIN_BURNED if alert_type == "burned" else WEBHOOK_DOMAIN_ALERT
-        payload = {
+        total_flagged += 1
+
+        # Skip if in cooldown
+        if (domain, workspace) in recently_alerted:
+            continue
+
+        # Severity score: burned >> alert, then by bounce/reply severity
+        severity = (1000 if alert_type == "burned" else 0) + (bounce_rate * 10) + ((1.0 - reply_rate) * 5)
+
+        workspace_alerts[workspace].append({
             "domain": domain,
-            "workspace_name": d["workspace_name"],
+            "workspace_name": workspace,
             "infra_type": d["infra_type"],
             "mailbox_count": d["mailbox_count"],
             "emails_sent": d["emails_sent"],
@@ -135,22 +207,65 @@ def check_domain_health_and_notify(mailboxes: list):
             "bounce_rate": bounce_rate,
             "alert_type": alert_type,
             "reason": ", ".join(reasons),
-        }
+            "severity": severity,
+        })
 
-        try:
-            resp = requests.post(webhook_url, json=payload, timeout=10)
-            print(f"  Webhook [{alert_type}] {domain}: {resp.status_code}")
-            if alert_type == "burned":
-                burned_count += 1
-            else:
-                alert_count += 1
-        except Exception as e:
-            print(f"  Webhook FAILED for {domain}: {e}")
+    # --- Pass 2: Cap per workspace and fire webhooks ---
+    burned_count = 0
+    alert_count = 0
+    skipped_by_cap = 0
 
-        # Throttle: 5-second delay between webhooks so n8n can process each one
-        time.sleep(5)
+    for workspace, alerts in workspace_alerts.items():
+        # Sort by severity (worst first)
+        alerts.sort(key=lambda a: a["severity"], reverse=True)
 
-    print(f"  Domain health alerts: {burned_count} burned, {alert_count} alerts")
+        # Calculate cap
+        total_domains = workspace_domain_counts.get(workspace, 1)
+        cap = max(WORKSPACE_CAP_MIN, min(WORKSPACE_CAP_MAX, int(total_domains * WORKSPACE_CAP_PERCENT)))
+
+        to_send = alerts[:cap]
+        skipped_by_cap += len(alerts) - len(to_send)
+
+        for rank, alert in enumerate(to_send, 1):
+            webhook_url = WEBHOOK_DOMAIN_BURNED if alert["alert_type"] == "burned" else WEBHOOK_DOMAIN_ALERT
+            payload = {
+                "domain": alert["domain"],
+                "workspace_name": alert["workspace_name"],
+                "infra_type": alert["infra_type"],
+                "mailbox_count": alert["mailbox_count"],
+                "emails_sent": alert["emails_sent"],
+                "replies": alert["replies"],
+                "bounces": alert["bounces"],
+                "reply_rate": alert["reply_rate"],
+                "bounce_rate": alert["bounce_rate"],
+                "alert_type": alert["alert_type"],
+                "reason": alert["reason"],
+                "alert_rank": rank,
+                "total_flagged": len(alerts),
+                "total_sent": len(to_send),
+                "total_workspace_domains": total_domains,
+                "cooldown_days": ALERT_COOLDOWN_DAYS,
+            }
+
+            try:
+                resp = requests.post(webhook_url, json=payload, timeout=10)
+                print(f"  Webhook [{alert['alert_type']}] {alert['domain']} ({workspace}): {resp.status_code}")
+                if alert["alert_type"] == "burned":
+                    burned_count += 1
+                else:
+                    alert_count += 1
+                # Record in Supabase for cooldown
+                _record_alert(alert["domain"], workspace, alert["alert_type"],
+                              alert["reason"], alert["bounce_rate"], alert["reply_rate"])
+            except Exception as e:
+                print(f"  Webhook FAILED for {alert['domain']}: {e}")
+
+            # Throttle between webhooks
+            time.sleep(5)
+
+    total_sent = burned_count + alert_count
+    print(f"  Domain health: {total_flagged} flagged, {len(recently_alerted)} in cooldown, "
+          f"{skipped_by_cap} capped, {total_sent} sent ({burned_count} burned, {alert_count} alerts)")
 
 
 def supabase_upsert(table: str, data: list, on_conflict: str = None, batch_size: int = 500) -> dict:
