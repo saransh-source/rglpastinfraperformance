@@ -33,7 +33,7 @@ DOMAIN_HEALTH_MIN_SENDS = 2000
 
 # Webhook safeguards — prevent cascading volume drops
 ALERT_COOLDOWN_DAYS = 14       # Don't re-alert a domain for 14 days after firing
-WORKSPACE_CAP_PERCENT = 0.20   # Max 20% of a workspace's domains alerted per run
+WORKSPACE_CAP_PERCENT = 0.10   # Max 10% of a workspace's domains alerted per run
 WORKSPACE_CAP_MIN = 5          # Always allow at least 5 alerts per workspace
 WORKSPACE_CAP_MAX = 30         # Never more than 30 per workspace per run
 
