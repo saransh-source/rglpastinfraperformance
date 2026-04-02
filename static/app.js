@@ -1589,6 +1589,40 @@ function updateBounceTopDomainsTable(bounceData) {
     }
 }
 
+function updateBounceSenderDomainsTable(bounceData) {
+    const tbody = document.getElementById('bounceSenderDomainsTableBody');
+    if (!tbody || !bounceData) return;
+    tbody.innerHTML = '';
+
+    const total = bounceData.total || 1;
+
+    const domainCounts = {};
+    if (bounceData.raw && bounceData.raw.length > 0) {
+        for (const event of bounceData.raw) {
+            const domain = event.sender_domain || 'Unknown';
+            domainCounts[domain] = (domainCounts[domain] || 0) + 1;
+        }
+    }
+
+    if (Object.keys(domainCounts).length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3" class="no-data">No sender domain data available</td></tr>';
+        return;
+    }
+
+    const sorted = Object.entries(domainCounts).sort((a, b) => b[1] - a[1]).slice(0, 20);
+
+    for (const [domain, count] of sorted) {
+        const pct = ((count / total) * 100).toFixed(1);
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${domain}</td>
+            <td>${formatNumber(count)}</td>
+            <td>${pct}%</td>
+        `;
+        tbody.appendChild(row);
+    }
+}
+
 async function updateBouncesTab() {
     console.log('Loading bounce data...');
     const bounceData = await fetchBounceData();
@@ -1709,6 +1743,7 @@ function renderBouncesFiltered() {
     updateBounceInfraTable(filteredData);
     updateBounceMXProviderTable(filteredData);
     updateBounceTopDomainsTable(filteredData);
+    updateBounceSenderDomainsTable(filteredData);
     updateBounceEventsTable(filteredData);
 }
 
