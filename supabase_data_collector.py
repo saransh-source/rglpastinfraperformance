@@ -638,10 +638,6 @@ def collect_and_store():
     result = supabase_upsert("daily_domain_stats", domain_stats, on_conflict="date,domain,workspace_name")
     print(f"  daily_domain_stats: {result}")
 
-    # Check domain health and send webhook alerts AFTER all data is stored
-    print("\nChecking domain health and sending alerts...")
-    check_domain_health_and_notify(mailboxes)
-
     # Summary
     print("\n" + "=" * 80)
     print("Collection Complete!")
@@ -1038,10 +1034,6 @@ def backfill_with_real_daily_data(n_days: int = 14, exclude_recent_days: int = 0
         result = supabase_upsert("daily_domain_stats", deduplicated_domain_stats, on_conflict="date,domain,workspace_name")
         print(f"  daily_domain_stats: {result}")
 
-    # Check domain health and send webhook alerts AFTER all data is stored
-    print("\nChecking domain health and sending alerts...")
-    check_domain_health_and_notify(mailboxes)
-
     print("\n" + "=" * 80)
     print(f"Backfill Complete! Created {len(all_dates)} days of REAL historical data.")
     print("=" * 80)
@@ -1058,6 +1050,54 @@ def backfill_last_n_days(n_days: int = 14, exclude_recent: int = 0):
     backfill_with_real_daily_data(n_days, exclude_recent_days=exclude_recent)
 
 
+def run_weekly_domain_alerts():
+    """
+    Weekly job: fetch fresh mailbox snapshots, then send domain health webhook alerts.
+    Per-workspace cap of 10% (worst first). Runs once a week (Monday).
+    """
+    print("=" * 80)
+    print("WEEKLY DOMAIN HEALTH ALERTS")
+    print("=" * 80)
+
+    workspace_clients = get_all_workspace_clients()
+    mailboxes = fetch_all_mailboxes_with_details(workspace_clients)
+
+    if not mailboxes:
+        print("No mailboxes fetched — aborting.")
+        return
+
+    # Upsert fresh snapshots so alerts use current data
+    snapshot_records = []
+    for mb in mailboxes:
+        if mb.get("email"):
+            snapshot_records.append({
+                "email": mb["email"],
+                "domain": mb.get("domain", ""),
+                "workspace_name": mb.get("workspace_name", ""),
+                "infra_type": mb.get("infra_type", ""),
+                "emails_sent": mb.get("emails_sent", 0),
+                "replies": mb.get("replies", 0),
+                "bounces": mb.get("bounces", 0),
+                "interested": mb.get("interested", 0),
+                "snapshot_date": datetime.now().date().isoformat(),
+            })
+
+    # Deduplicate by email before upsert
+    seen_emails = set()
+    deduped = []
+    for r in snapshot_records:
+        if r["email"] not in seen_emails:
+            seen_emails.add(r["email"])
+            deduped.append(r)
+
+    print(f"\nRefreshing mailbox_snapshots ({len(deduped)} unique mailboxes)...")
+    result = supabase_upsert("mailbox_snapshots", deduped, on_conflict="email")
+    print(f"  mailbox_snapshots: {result}")
+
+    print("\nChecking domain health and sending weekly alerts...")
+    check_domain_health_and_notify(mailboxes)
+
+
 if __name__ == "__main__":
     import sys
 
@@ -1066,5 +1106,7 @@ if __name__ == "__main__":
         # Optional third arg: exclude recent days
         exclude = int(sys.argv[3]) if len(sys.argv) > 3 else 0
         backfill_last_n_days(days, exclude)
+    elif len(sys.argv) > 1 and sys.argv[1] == "weekly_alerts":
+        run_weekly_domain_alerts()
     else:
         collect_and_store()

@@ -1,0 +1,29 @@
+name: Weekly Domain Health Alerts
+
+on:
+  schedule:
+    # Run every Monday at 11:00 UTC (4:30 PM IST)
+    - cron: '0 11 * * 1'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  alerts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run weekly domain health alerts
+        run: python supabase_data_collector.py weekly_alerts
+        env:
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
